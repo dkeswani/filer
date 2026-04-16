@@ -1,0 +1,183 @@
+import fs from 'fs';
+import path from 'path';
+import { glob } from 'glob';
+// ── File size limits ──────────────────────────────────────────────────────────
+const MAX_FILE_BYTES = 100_000; // 100KB — skip files larger than this
+const MAX_MODULE_TOKENS = 20_000; // split modules that exceed this
+// ── Scan repository for source files ─────────────────────────────────────────
+export async function scanFiles(root, config) {
+    const files = [];
+    for (const pattern of config.include) {
+        const matches = await glob(pattern, {
+            cwd: root,
+            ignore: config.exclude,
+            nodir: true,
+        });
+        for (const rel of matches) {
+            const abs = path.join(root, rel);
+            // Skip binary files by extension
+            if (isBinary(rel))
+                continue;
+            let stat;
+            try {
+                stat = fs.statSync(abs);
+            }
+            catch {
+                continue;
+            }
+            if (stat.size > MAX_FILE_BYTES)
+                continue;
+            let content;
+            try {
+                content = fs.readFileSync(abs, 'utf-8');
+            }
+            catch {
+                continue;
+            }
+            files.push({
+                path: rel,
+                absolutePath: abs,
+                content,
+                sizeBytes: stat.size,
+            });
+        }
+    }
+    return files;
+}
+// ── Group files into modules ──────────────────────────────────────────────────
+export function groupIntoModules(files, config) {
+    const { strategy, max_depth, manifests } = config.module_boundaries;
+    if (strategy === 'package_manifest') {
+        return groupByManifest(files, manifests);
+    }
+    // Default: directory-based grouping up to max_depth
+    return groupByDirectory(files, max_depth);
+}
+function groupByDirectory(files, maxDepth) {
+    const moduleMap = new Map();
+    for (const file of files) {
+        const parts = file.path.split('/');
+        const depth = Math.min(parts.length - 1, maxDepth);
+        const modPath = parts.slice(0, depth).join('/') || '.';
+        if (!moduleMap.has(modPath))
+            moduleMap.set(modPath, []);
+        moduleMap.get(modPath).push(file);
+    }
+    const modules = [];
+    for (const [modPath, modFiles] of moduleMap) {
+        const tokens = estimateTokens(modFiles);
+        // Split large modules
+        if (tokens > MAX_MODULE_TOKENS && modFiles.length > 1) {
+            const chunks = splitModule(modPath, modFiles);
+            modules.push(...chunks);
+        }
+        else {
+            modules.push({
+                path: modPath,
+                name: modPath.split('/').pop() ?? modPath,
+                files: modFiles,
+                tokens,
+            });
+        }
+    }
+    // Sort by path for deterministic ordering
+    return modules.sort((a, b) => a.path.localeCompare(b.path));
+}
+function groupByManifest(files, manifests) {
+    // Find manifest files to determine package boundaries
+    const manifestFiles = files.filter(f => manifests.some(m => f.path.endsWith(m)));
+    if (manifestFiles.length === 0) {
+        // Fall back to directory grouping
+        return groupByDirectory(files, 3);
+    }
+    const modules = [];
+    const assigned = new Set();
+    for (const manifest of manifestFiles) {
+        const pkgRoot = path.dirname(manifest.path);
+        const pkgFiles = files.filter(f => f.path.startsWith(pkgRoot + '/') && !assigned.has(f.path));
+        for (const f of pkgFiles)
+            assigned.add(f.path);
+        if (pkgFiles.length > 0) {
+            modules.push({
+                path: pkgRoot,
+                name: pkgRoot.split('/').pop() ?? pkgRoot,
+                files: pkgFiles,
+                tokens: estimateTokens(pkgFiles),
+            });
+        }
+    }
+    // Remaining unassigned files
+    const remaining = files.filter(f => !assigned.has(f.path));
+    if (remaining.length > 0) {
+        const grouped = groupByDirectory(remaining, 3);
+        modules.push(...grouped);
+    }
+    return modules.sort((a, b) => a.path.localeCompare(b.path));
+}
+// ── Split an oversized module into smaller chunks ─────────────────────────────
+function splitModule(modPath, files) {
+    const chunks = [];
+    let current = [];
+    let currentTokens = 0;
+    for (const file of files) {
+        const fileTokens = estimateTokens([file]);
+        if (currentTokens + fileTokens > MAX_MODULE_TOKENS && current.length > 0) {
+            chunks.push({
+                path: modPath,
+                name: `${modPath.split('/').pop() ?? modPath} (part ${chunks.length + 1})`,
+                files: current,
+                tokens: currentTokens,
+            });
+            current = [];
+            currentTokens = 0;
+        }
+        current.push(file);
+        currentTokens += fileTokens;
+    }
+    if (current.length > 0) {
+        chunks.push({
+            path: modPath,
+            name: `${modPath.split('/').pop() ?? modPath}${chunks.length > 0 ? ` (part ${chunks.length + 1})` : ''}`,
+            files: current,
+            tokens: currentTokens,
+        });
+    }
+    return chunks;
+}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function estimateTokens(files) {
+    const chars = files.reduce((s, f) => s + f.content.length, 0);
+    return Math.ceil(chars / 4);
+}
+function isBinary(filePath) {
+    const binaryExts = new Set([
+        '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+        '.pdf', '.zip', '.tar', '.gz', '.wasm',
+        '.ttf', '.woff', '.woff2', '.eot',
+        '.mp4', '.mp3', '.wav', '.ogg',
+        '.exe', '.dll', '.so', '.dylib',
+        '.lock', // package lock files — too noisy, not useful for extraction
+    ]);
+    return binaryExts.has(path.extname(filePath).toLowerCase());
+}
+// ── Get files changed since a git commit ─────────────────────────────────────
+import { execSync } from 'child_process';
+export function getChangedFiles(root, since = 'HEAD~1') {
+    try {
+        const output = execSync(`git diff --name-only ${since}..HEAD`, { cwd: root, stdio: 'pipe' }).toString().trim();
+        return output.length > 0 ? output.split('\n') : [];
+    }
+    catch {
+        return [];
+    }
+}
+export function getCurrentCommit(root) {
+    try {
+        return execSync('git rev-parse --short HEAD', { cwd: root, stdio: 'pipe' })
+            .toString().trim();
+    }
+    catch {
+        return undefined;
+    }
+}
+//# sourceMappingURL=scanner.js.map

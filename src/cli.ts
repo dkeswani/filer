@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { initCommand }  from './commands/init.js';
-import { statsCommand } from './commands/stats.js';
-import { showCommand }  from './commands/show.js';
+import chalk from 'chalk';
+import { initCommand }   from './commands/init.js';
+import { indexCommand }  from './commands/index.js';
+import { updateCommand } from './commands/update.js';
+import { statsCommand }  from './commands/stats.js';
+import { showCommand }   from './commands/show.js';
 
 const program = new Command();
 
@@ -37,29 +40,30 @@ program
   .option('--json', 'Output raw JSON')
   .action((id, options) => showCommand(id, options));
 
-// ── Placeholder stubs (Days 4–15) ─────────────────────────────────────────────
+// ── filer index ───────────────────────────────────────────────────────────────
 program
   .command('index')
-  .description('Build the full knowledge layer from your codebase (Day 4–9)')
-  .option('--scope <path>', 'Limit to a directory')
-  .option('--type <types>', 'Limit to specific node types')
+  .description('Build the full knowledge layer from your codebase')
+  .option('--scope <path>', 'Limit indexing to a specific directory')
+  .option('--type <types>', 'Limit to specific node types (comma-separated)')
   .option('--force', 'Re-index already-indexed files')
   .option('--dry-run', 'Show what would be indexed without writing')
   .option('--cost', 'Estimate LLM cost without making API calls')
-  .action(() => {
-    console.log('\n  filer index — coming in Days 4–9 of the build\n');
-    process.exit(0);
-  });
+  .action((options) => indexCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
+// ── filer update ──────────────────────────────────────────────────────────────
 program
   .command('update')
-  .description('Incremental update from last git commit (Day 10–11)')
-  .option('--since <ref>', 'Git ref to diff from')
+  .description('Incremental update from last git commit')
+  .option('--since <ref>', 'Git ref to diff from (default: HEAD~1)')
   .option('--silent', 'Suppress output (for git hook use)')
-  .action(() => {
-    console.log('\n  filer update — coming in Days 10–11 of the build\n');
-    process.exit(0);
-  });
+  .action((options) => updateCommand(options).catch(err => {
+    if (!options.silent) console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
 program
   .command('query <question>')
