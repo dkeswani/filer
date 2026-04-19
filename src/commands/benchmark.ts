@@ -1,74 +1,198 @@
 import chalk from 'chalk';
-import fs from 'fs';
-import path from 'path';
-import { filerExists, readAllNodes, loadNodesForScope, readConfig } from '../store/mod.js';
+import ora from 'ora';
+import readline from 'readline';
+import {
+  filerExists,
+  readConfig,
+  readIndex,
+  loadNodesForScope,
+} from '../store/mod.js';
 import { LLMGateway } from '../llm/mod.js';
+import { serializeNodesForBenchmark } from './query.js';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface BenchmarkOptions {
-  task?:    string;
-  scope?:   string;
-  runs?:    string;
-  output?:  string;
+  scope?:  string;
+  task?:   string;
+  runs?:   string;
+  dryRun?: boolean;
 }
 
-interface TaskResult {
-  run:        number;
-  with_filer: boolean;
-  response:   string;
-  score:      number;
-  tokens:     number;
-  latency_ms: number;
+interface BenchmarkRun {
+  score:       number;   // 0-100
+  tokens:      number;
+  latency_ms:  number;
+  violations:  string[];
+  output:      string;
 }
 
-interface BenchmarkReport {
-  task:             string;
-  scope:            string;
-  runs_per_variant: number;
-  without_filer:    { avg_score: number; avg_tokens: number; avg_latency_ms: number };
-  with_filer:       { avg_score: number; avg_tokens: number; avg_latency_ms: number; context_nodes: number };
-  delta_score:      number;
-  results:          TaskResult[];
+interface BenchmarkResult {
+  variant:     'without' | 'with';
+  runs:        BenchmarkRun[];
+  avg_score:   number;
+  avg_tokens:  number;
+  avg_latency: number;
+  nodes_loaded: number;
 }
 
-// ── Built-in benchmark tasks ──────────────────────────────────────────────────
+// ── Scoring prompt ────────────────────────────────────────────────────────────
 
-const BUILTIN_TASKS: Record<string, { prompt: string; scope: string }> = {
-  'implement-feature': {
-    scope: 'src/',
-    prompt: 'Implement a new user authentication endpoint. Describe the key considerations and potential pitfalls.',
-  },
-  'review-code': {
-    scope: 'src/',
-    prompt: 'Review this code for correctness, security, and adherence to project patterns:\n\nconst token = jwt.sign({ userId, email }, secret, { expiresIn: "30d" });',
-  },
-  'debug-issue': {
-    scope: 'src/',
-    prompt: 'A payment occasionally processes twice. What are the most likely causes and how would you fix them?',
-  },
-};
+const SCORE_SYSTEM = `You are a code quality judge for the Filer benchmark system.
 
-// ── LLM scoring prompt ────────────────────────────────────────────────────────
+You will be given:
+1. A coding task description
+2. A code output to evaluate
+3. (Optionally) Filer knowledge nodes that were available as context
 
-function buildScoringPrompt(task: string, response: string, hasContext: boolean): string {
-  return `You are evaluating an AI coding assistant's response for quality and codebase-awareness.
+Score the output from 0-100 based on:
+- Correctness: does the code correctly implement the task? (40 points)
+- Convention adherence: does it follow the patterns in the knowledge nodes? (30 points)
+- Constraint compliance: does it avoid violating any constraints or security rules? (20 points)
+- Code quality: is it clean, readable, and idiomatic? (10 points)
 
-Task given to the assistant: "${task}"
-The assistant ${hasContext ? 'HAD access to' : 'did NOT have access to'} the codebase knowledge layer.
+If no knowledge nodes are provided, score on correctness and code quality only (50/50).
 
-Response to evaluate:
----
-${response}
----
+List any constraint or security violations you found.
 
-Score the response from 0-100 on:
-- Specificity (does it make concrete, actionable points vs generic advice?)
-- Risk awareness (does it identify non-obvious failure modes?)
-- Constraint awareness (does it mention or respect codebase-specific rules, if known?)
+Respond with JSON only:
+{
+  "score": number,
+  "violations": string[],
+  "reasoning": string
+}`;
 
-Respond with JSON only: { "score": <number 0-100>, "reasoning": "<one sentence>" }`;
+const CODEGEN_SYSTEM = `You are an AI coding assistant. Implement the requested task as concisely and correctly as possible. Return only the code, no explanation.`;
+
+// ── Scope detection ───────────────────────────────────────────────────────────
+
+function detectScopes(root: string): string[] {
+  const config = readConfig(root);
+  if (!config) return [];
+
+  // Extract unique top-level directories from include patterns
+  const dirs = new Set<string>();
+  for (const pattern of config.include) {
+    // e.g. "backend/**/*.ts" → "backend"
+    // e.g. "frontend/src/**/*.tsx" → "frontend/src"
+    const parts = pattern.split('/**')[0].split('/*')[0];
+    if (parts && !parts.startsWith('**')) {
+      dirs.add(parts);
+    }
+  }
+
+  return Array.from(dirs).sort();
 }
 
-// ── Main command ──────────────────────────────────────────────────────────────
+function detectTaskForScope(scope: string): string {
+  if (scope.includes('api') || scope.includes('routes') || scope.includes('backend')) {
+    return 'Add a new API endpoint that returns paginated results with proper error handling';
+  }
+  if (scope.includes('component') || scope.includes('frontend') || scope.includes('ui')) {
+    return 'Add a new React component that fetches and displays data from an API endpoint';
+  }
+  if (scope.includes('auth')) {
+    return 'Add a middleware function that validates authentication and attaches user context';
+  }
+  if (scope.includes('db') || scope.includes('model') || scope.includes('schema')) {
+    return 'Add a new database query function with proper error handling and type safety';
+  }
+  return 'Add a new utility function with proper error handling and TypeScript types';
+}
+
+// ── Prompt user for scope ─────────────────────────────────────────────────────
+
+async function promptForScope(scopes: string[]): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
+
+  console.log(chalk.bold('\n  Available scopes from your .filer config:\n'));
+  scopes.forEach((s, i) => console.log(`    ${chalk.cyan(i + 1 + '.')} ${s}`));
+  console.log(`    ${chalk.cyan((scopes.length + 1) + '.')} Enter manually\n`);
+
+  const answer = (await ask(chalk.bold('  Choose scope (number or path): '))).trim();
+  rl.close();
+
+  const idx = parseInt(answer) - 1;
+  if (!isNaN(idx) && idx >= 0 && idx < scopes.length) {
+    return scopes[idx];
+  }
+  if (idx === scopes.length) {
+    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const ask2 = (q: string) => new Promise<string>(resolve => rl2.question(q, resolve));
+    const manual = (await ask2(chalk.dim('  Enter path: '))).trim();
+    rl2.close();
+    return manual || scopes[0];
+  }
+  // If they typed a path directly
+  if (answer && !answer.match(/^\d+$/)) return answer;
+  return scopes[0];
+}
+
+// ── Single benchmark run ──────────────────────────────────────────────────────
+
+async function runOnce(
+  gateway:     LLMGateway,
+  task:        string,
+  nodeContext: string | null,
+  scope:       string
+): Promise<BenchmarkRun> {
+  const start = Date.now();
+
+  // Build the coding prompt
+  const codingPrompt = nodeContext
+    ? `You are working in scope: ${scope}\n\nFiler knowledge context:\n${nodeContext}\n\nTask: ${task}\n\nImplement the task following the knowledge context above.`
+    : `You are working in scope: ${scope}\n\nTask: ${task}\n\nImplement the task.`;
+
+  // Generate code
+  const codeResponse = await gateway.complete(
+    'extract.full',
+    [{ role: 'user', content: codingPrompt }],
+    { system: CODEGEN_SYSTEM, max_tokens: 1500, temperature: 0.3 }
+  );
+
+  const latency = Date.now() - start;
+
+  // Score the output
+  const scorePrompt = `Task: ${task}
+
+Code output:
+${codeResponse.content}
+
+${nodeContext ? `Filer knowledge nodes that were available:\n${nodeContext}` : 'No Filer knowledge nodes were available (baseline run).'}
+
+Score this code output.`;
+
+  const scoreResponse = await gateway.complete(
+    'query.answer',
+    [{ role: 'user', content: scorePrompt }],
+    { system: SCORE_SYSTEM, max_tokens: 500, temperature: 0 }
+  );
+
+  let score = 50;
+  let violations: string[] = [];
+
+  try {
+    const { parseJSON } = await import('../llm/gateway.js');
+    const parsed = parseJSON<{ score: number; violations: string[]; reasoning: string }>(
+      scoreResponse.content
+    );
+    score      = Math.max(0, Math.min(100, parsed.score));
+    violations = parsed.violations ?? [];
+  } catch {
+    // If parsing fails, use a default score
+  }
+
+  return {
+    score,
+    tokens:     codeResponse.input_tokens + codeResponse.output_tokens,
+    latency_ms: latency,
+    violations,
+    output:     codeResponse.content,
+  };
+}
+
+// ── Main benchmark command ────────────────────────────────────────────────────
 
 export async function benchmarkCommand(options: BenchmarkOptions): Promise<void> {
   const root = process.cwd();
@@ -80,169 +204,167 @@ export async function benchmarkCommand(options: BenchmarkOptions): Promise<void>
 
   const config = readConfig(root);
   if (!config) {
-    console.error(chalk.red('\n  No .filer-config.json found. Run: filer init\n'));
+    console.error(chalk.red('\n  No config found. Run: filer init\n'));
     process.exit(1);
   }
 
-  const taskKey = options.task ?? 'implement-feature';
-  const builtin = BUILTIN_TASKS[taskKey];
-  if (!builtin) {
-    console.error(chalk.red(`\n  Unknown task: ${taskKey}`));
-    console.error(chalk.dim(`  Available: ${Object.keys(BUILTIN_TASKS).join(', ')}\n`));
+  // ── Resolve scope ─────────────────────────────────────────────────────────
+
+  let scope = options.scope;
+
+  if (!scope) {
+    const scopes = detectScopes(root);
+
+    if (scopes.length === 0) {
+      console.error(chalk.red('\n  Could not detect source directories from config.'));
+      console.error(chalk.dim('  Use: filer benchmark --scope backend/app/\n'));
+      process.exit(1);
+    }
+
+    if (scopes.length === 1) {
+      scope = scopes[0];
+      console.log(chalk.dim(`\n  Auto-detected scope: ${scope}`));
+    } else {
+      scope = await promptForScope(scopes);
+    }
+  }
+
+  // ── Verify nodes exist for scope ──────────────────────────────────────────
+
+  const nodes = loadNodesForScope(root, [scope]);
+
+  if (nodes.length === 0) {
+    const index    = readIndex(root);
+    const allScopes = [...new Set(index?.nodes.map(n => n.scope[0]).filter(Boolean) ?? [])].slice(0, 5);
+
+    console.log(chalk.yellow(`\n  ⚠ No Filer nodes found for scope: ${scope}`));
+    if (allScopes.length > 0) {
+      console.log(chalk.dim('  Nodes exist for:'));
+      allScopes.forEach(s => console.log(chalk.dim(`    · ${s}`)));
+      console.log(chalk.dim('\n  Re-run with one of these scopes for a meaningful benchmark.'));
+      console.log(chalk.dim(`  Example: filer benchmark --scope ${allScopes[0]}\n`));
+    }
     process.exit(1);
   }
 
-  const scope   = options.scope ?? builtin.scope;
-  const runs    = parseInt(options.runs ?? '3', 10);
-  const taskPrompt = builtin.prompt;
+  // ── Resolve task ──────────────────────────────────────────────────────────
 
-  const gateway = new LLMGateway(config);
+  const task = options.task ?? detectTaskForScope(scope);
+  const runs = Math.max(1, Math.min(5, parseInt(options.runs ?? '3') || 3));
 
   console.log(chalk.bold('\n  Filer Benchmark\n'));
-  console.log(chalk.dim(`  Task:  ${taskKey}`));
-  console.log(chalk.dim(`  Scope: ${scope}`));
-  console.log(chalk.dim(`  Runs:  ${runs} per variant (${runs * 2} total)\n`));
+  console.log(`  Scope:  ${chalk.cyan(scope)}`);
+  console.log(`  Task:   ${task}`);
+  console.log(`  Runs:   ${runs} per variant (${runs * 2} total LLM calls)`);
+  console.log(`  Nodes:  ${nodes.length} loaded for scope`);
 
-  const scopeNodes = loadNodesForScope(root, [scope]);
-  const contextBlock = scopeNodes.length > 0
-    ? `\n\nKnowledge layer context for ${scope}:\n\n` +
-      scopeNodes.map(n => {
-        const summary = getNodeSummary(n);
-        return `[${n.type.toUpperCase()}] ${n.id}\n${summary}`;
-      }).join('\n\n')
-    : '';
+  // Show node types loaded
+  const byType: Record<string, number> = {};
+  for (const node of nodes) {
+    byType[node.type] = (byType[node.type] ?? 0) + 1;
+  }
+  const typeStr = Object.entries(byType).map(([t, c]) => `${c} ${t}`).join(', ');
+  console.log(chalk.dim(`  Types:  ${typeStr}\n`));
 
-  const results: TaskResult[] = [];
-
-  // ── Without Filer context ──────────────────────────────────────────────────
-  console.log(chalk.dim('  Running without Filer context...'));
-  for (let i = 0; i < runs; i++) {
-    const start = Date.now();
-    const res = await gateway.complete('query.answer', [
-      { role: 'user', content: taskPrompt },
-    ], { max_tokens: 512, temperature: 0.3 });
-
-    // Score the response
-    const scoreRes = await gateway.completeJSON<{ score: number; reasoning: string }>(
-      'query.answer',
-      [{ role: 'user', content: buildScoringPrompt(taskPrompt, res.content, false) }],
-      { max_tokens: 128 }
-    );
-
-    results.push({
-      run: i + 1,
-      with_filer: false,
-      response: res.content,
-      score: scoreRes?.score ?? 50,
-      tokens: res.input_tokens + res.output_tokens,
-      latency_ms: Date.now() - start,
-    });
-    process.stdout.write(chalk.dim(`    run ${i + 1}/${runs} score=${scoreRes?.score ?? '?'}\n`));
+  if (options.dryRun) {
+    console.log(chalk.yellow('  Dry run — no API calls made.\n'));
+    console.log(chalk.dim('  Would run:'));
+    console.log(chalk.dim(`    ${runs} baseline runs (no Filer context)`));
+    console.log(chalk.dim(`    ${runs} Filer runs (with ${nodes.length} nodes loaded)`));
+    return;
   }
 
-  // ── With Filer context ─────────────────────────────────────────────────────
+  const gateway     = new LLMGateway(config);
+  const nodeContext = serializeNodesForBenchmark(nodes);
+
+  // ── Baseline runs (without Filer) ─────────────────────────────────────────
+
+  console.log(chalk.dim('  Running baseline (without Filer context)...'));
+  const baselineRuns: BenchmarkRun[] = [];
+
+  for (let i = 0; i < runs; i++) {
+    const spinner = ora(chalk.dim(`    run ${i + 1}/${runs}`)).start();
+    const result  = await runOnce(gateway, task, null, scope);
+    baselineRuns.push(result);
+    spinner.succeed(chalk.dim(`    run ${i + 1}/${runs}  score=${result.score}  ${result.violations.length > 0 ? chalk.red(`violations: ${result.violations.length}`) : chalk.green('no violations')}`));
+  }
+
+  // ── Filer runs (with context) ─────────────────────────────────────────────
+
   console.log(chalk.dim('\n  Running with Filer context...'));
+  const filerRuns: BenchmarkRun[] = [];
+
   for (let i = 0; i < runs; i++) {
-    const start = Date.now();
-    const res = await gateway.complete('query.answer', [
-      { role: 'user', content: taskPrompt + contextBlock },
-    ], { max_tokens: 512, temperature: 0.3 });
-
-    const scoreRes = await gateway.completeJSON<{ score: number; reasoning: string }>(
-      'query.answer',
-      [{ role: 'user', content: buildScoringPrompt(taskPrompt, res.content, true) }],
-      { max_tokens: 128 }
-    );
-
-    results.push({
-      run: i + 1,
-      with_filer: true,
-      response: res.content,
-      score: scoreRes?.score ?? 50,
-      tokens: res.input_tokens + res.output_tokens,
-      latency_ms: Date.now() - start,
-    });
-    process.stdout.write(chalk.dim(`    run ${i + 1}/${runs} score=${scoreRes?.score ?? '?'}\n`));
+    const spinner = ora(chalk.dim(`    run ${i + 1}/${runs}`)).start();
+    const result  = await runOnce(gateway, task, nodeContext, scope);
+    filerRuns.push(result);
+    spinner.succeed(chalk.dim(`    run ${i + 1}/${runs}  score=${result.score}  ${result.violations.length > 0 ? chalk.red(`violations: ${result.violations.length}`) : chalk.green('no violations')}`));
   }
 
-  // ── Aggregate ──────────────────────────────────────────────────────────────
-  const withoutResults = results.filter(r => !r.with_filer);
-  const withResults    = results.filter(r => r.with_filer);
+  // ── Compute results ───────────────────────────────────────────────────────
 
-  const report: BenchmarkReport = {
-    task: taskKey,
-    scope,
-    runs_per_variant: runs,
-    without_filer: {
-      avg_score:      avg(withoutResults.map(r => r.score)),
-      avg_tokens:     avg(withoutResults.map(r => r.tokens)),
-      avg_latency_ms: avg(withoutResults.map(r => r.latency_ms)),
-    },
-    with_filer: {
-      avg_score:      avg(withResults.map(r => r.score)),
-      avg_tokens:     avg(withResults.map(r => r.tokens)),
-      avg_latency_ms: avg(withResults.map(r => r.latency_ms)),
-      context_nodes:  scopeNodes.length,
-    },
-    delta_score: avg(withResults.map(r => r.score)) - avg(withoutResults.map(r => r.score)),
-    results,
+  const avg = (arr: number[]) => Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
+
+  const baselineResult: BenchmarkResult = {
+    variant:      'without',
+    runs:         baselineRuns,
+    avg_score:    avg(baselineRuns.map(r => r.score)),
+    avg_tokens:   avg(baselineRuns.map(r => r.tokens)),
+    avg_latency:  avg(baselineRuns.map(r => r.latency_ms)),
+    nodes_loaded: 0,
   };
 
-  // ── Print report ───────────────────────────────────────────────────────────
+  const filerResult: BenchmarkResult = {
+    variant:      'with',
+    runs:         filerRuns,
+    avg_score:    avg(filerRuns.map(r => r.score)),
+    avg_tokens:   avg(filerRuns.map(r => r.tokens)),
+    avg_latency:  avg(filerRuns.map(r => r.latency_ms)),
+    nodes_loaded: nodes.length,
+  };
+
+  const delta     = filerResult.avg_score - baselineResult.avg_score;
+  const deltaStr  = delta >= 0
+    ? chalk.green(`+${delta} points`)
+    : chalk.red(`${delta} points`);
+
+  const baselineViolations = baselineRuns.flatMap(r => r.violations).length;
+  const filerViolations    = filerRuns.flatMap(r => r.violations).length;
+  const violDelta          = baselineViolations - filerViolations;
+
+  // ── Print results ─────────────────────────────────────────────────────────
+
   console.log(chalk.bold('\n  Results\n'));
-  const cols = ['Variant', 'Avg Score', 'Avg Tokens', 'Avg Latency'];
-  console.log('  ' + cols.map(c => c.padEnd(16)).join(''));
-  console.log('  ' + '-'.repeat(64));
+  console.log(
+    `  ${'Variant'.padEnd(20)} ${'Avg Score'.padEnd(14)} ${'Violations'.padEnd(14)} ${'Avg Tokens'.padEnd(14)} Avg Latency`
+  );
+  console.log('  ' + '─'.repeat(72));
+  console.log(
+    `  ${'Without Filer'.padEnd(20)} ${String(baselineResult.avg_score).padEnd(14)} ${String(baselineViolations).padEnd(14)} ${String(baselineResult.avg_tokens).padEnd(14)} ${Math.round(baselineResult.avg_latency / 1000)}s`
+  );
+  console.log(
+    `  ${'With Filer'.padEnd(20)} ${String(filerResult.avg_score).padEnd(14)} ${String(filerViolations).padEnd(14)} ${String(filerResult.avg_tokens).padEnd(14)} ${Math.round(filerResult.avg_latency / 1000)}s`
+  );
+  console.log();
+  console.log(`  Score delta:       ${deltaStr} (with Filer vs. baseline)`);
+  console.log(`  Violations delta:  ${violDelta >= 0 ? chalk.green(`-${violDelta}`) : chalk.red(`+${Math.abs(violDelta)}`)} violations with Filer`);
+  console.log(`  Context nodes:     ${nodes.length} loaded (${typeStr})`);
+  console.log(`  LLM cost:          ~$${gateway.sessionStats().estimated_usd.toFixed(4)}`);
 
-  const woPct = Math.round(report.without_filer.avg_score);
-  const wiPct = Math.round(report.with_filer.avg_score);
-  console.log('  ' + [
-    'Without Filer'.padEnd(16),
-    `${woPct}`.padEnd(16),
-    `${Math.round(report.without_filer.avg_tokens)}`.padEnd(16),
-    `${Math.round(report.without_filer.avg_latency_ms)}ms`,
-  ].join(''));
-  console.log('  ' + [
-    'With Filer'.padEnd(16),
-    `${wiPct}`.padEnd(16),
-    `${Math.round(report.with_filer.avg_tokens)}`.padEnd(16),
-    `${Math.round(report.with_filer.avg_latency_ms)}ms`,
-  ].join(''));
-
-  const delta = report.delta_score;
-  const deltaStr = delta > 0
-    ? chalk.green(`+${delta.toFixed(1)} points`)
-    : delta < 0 ? chalk.red(`${delta.toFixed(1)} points`)
-    : chalk.dim('no change');
-
-  console.log(`\n  Score delta: ${deltaStr} (with vs. without Filer context)`);
-  console.log(chalk.dim(`  Context nodes loaded: ${scopeNodes.length}`));
-
-  if (options.output) {
-    const outPath = path.resolve(options.output);
-    fs.writeFileSync(outPath, JSON.stringify(report, null, 2) + '\n', 'utf-8');
-    console.log(chalk.dim(`\n  Report saved: ${outPath}`));
+  if (delta < 0) {
+    console.log(chalk.yellow('\n  ⚠ Score decreased with Filer context.'));
+    console.log(chalk.dim('  Possible causes:'));
+    console.log(chalk.dim('    · Nodes may be too verbose — run filer verify to prune low-quality nodes'));
+    console.log(chalk.dim('    · Task may not align well with available nodes'));
+    console.log(chalk.dim('    · Try a different --scope or --task that matches your node content'));
+  } else if (delta >= 10) {
+    console.log(chalk.green('\n  ✓ Meaningful improvement with Filer context.'));
+  } else if (delta >= 0) {
+    console.log(chalk.dim('\n  Marginal improvement. Consider verifying more nodes for stronger signal.'));
   }
 
   console.log();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function avg(nums: number[]): number {
-  return nums.length === 0 ? 0 : nums.reduce((a, b) => a + b, 0) / nums.length;
-}
 
-function getNodeSummary(node: { type: string; [k: string]: unknown }): string {
-  switch (node.type) {
-    case 'constraint':  return (node as any).statement;
-    case 'danger':      return (node as any).statement;
-    case 'assumption':  return (node as any).statement;
-    case 'pattern':     return (node as any).statement;
-    case 'intent':      return (node as any).purpose;
-    case 'decision':    return (node as any).statement;
-    case 'security':    return (node as any).statement;
-    case 'antipattern': return (node as any).statement;
-    default:            return '';
-  }
-}
