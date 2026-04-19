@@ -9,8 +9,10 @@ import { showCommand }   from './commands/show.js';
 import { queryCommand }  from './commands/query.js';
 import { verifyCommand } from './commands/verify.js';
 import { hookCommand }   from './commands/hook.js';
-import { learnCommand }  from './commands/learn.js';
-import { mcpCommand }    from './commands/mcp.js';
+import { learnCommand }     from './commands/learn.js';
+import { measureCommand }   from './commands/measure.js';
+import { benchmarkCommand } from './commands/benchmark.js';
+import { mcpCommand }       from './commands/mcp.js';
 
 const program = new Command();
 
@@ -113,6 +115,32 @@ program
   .option('--auto-apply', 'Auto-apply nodes with confidence >= 0.85')
   .option('--dry-run', 'Show proposals without writing nodes')
   .action((options) => learnCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+// ── filer measure ─────────────────────────────────────────────────────────────
+program
+  .command('measure')
+  .description('Compute productivity metrics from GitHub PR data')
+  .option('--since <date>', 'Only analyse PRs merged after this date (YYYY-MM-DD)')
+  .option('--before <date>', 'Only analyse PRs merged before this date (YYYY-MM-DD)')
+  .option('--before-after <date>', 'Compare metrics before and after this pivot date')
+  .option('--pr <number>', 'Analyse a single PR by number')
+  .action((options) => measureCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+// ── filer benchmark ───────────────────────────────────────────────────────────
+program
+  .command('benchmark')
+  .description('Run identical tasks with/without Filer context and score outputs')
+  .option('--task <name>', 'Task to benchmark: implement-feature | review-code | debug-issue', 'implement-feature')
+  .option('--scope <path>', 'Scope path to load knowledge nodes from', 'src/')
+  .option('--runs <n>', 'Number of runs per variant', '3')
+  .option('--output <file>', 'Save full report as JSON to this path')
+  .action((options) => benchmarkCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);
   }));
