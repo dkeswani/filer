@@ -6,6 +6,11 @@ import { indexCommand }  from './commands/index.js';
 import { updateCommand } from './commands/update.js';
 import { statsCommand }  from './commands/stats.js';
 import { showCommand }   from './commands/show.js';
+import { queryCommand }  from './commands/query.js';
+import { verifyCommand } from './commands/verify.js';
+import { hookCommand }   from './commands/hook.js';
+import { learnCommand }  from './commands/learn.js';
+import { mcpCommand }    from './commands/mcp.js';
 
 const program = new Command();
 
@@ -65,32 +70,61 @@ program
     process.exit(1);
   }));
 
+// ── filer query ───────────────────────────────────────────────────────────────
 program
   .command('query <question>')
-  .description('Ask a natural language question about the codebase (Day 12–13)')
-  .action(() => {
-    console.log('\n  filer query — coming in Days 12–13 of the build\n');
-    process.exit(0);
-  });
+  .description('Ask a natural language question about the codebase knowledge')
+  .option('--type <types>', 'Filter nodes by type(s), comma-separated')
+  .option('--scope <path>', 'Limit to a specific scope path')
+  .option('--no-llm', 'Skip LLM synthesis, return keyword-matched nodes only')
+  .option('--json', 'Output raw JSON')
+  .action((question, options) => queryCommand(question, options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
+// ── filer verify ──────────────────────────────────────────────────────────────
 program
   .command('verify')
-  .description('Interactive node verification workflow (Day 12–13)')
+  .description('Interactive node verification workflow')
   .option('--type <types>', 'Verify only specific node types')
   .option('--stale', 'Verify only potentially stale nodes')
   .option('--unverified-only', 'Skip already verified nodes')
-  .action(() => {
-    console.log('\n  filer verify — coming in Days 12–13 of the build\n');
-    process.exit(0);
-  });
+  .action((options) => verifyCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
+// ── filer hook ────────────────────────────────────────────────────────────────
 program
   .command('hook <action>')
   .description('Manage git post-commit hook (install | uninstall | status)')
-  .action(() => {
-    console.log('\n  filer hook — coming in Days 10–11 of the build\n');
-    process.exit(0);
-  });
+  .action((action) => hookCommand(action).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+// ── filer learn ───────────────────────────────────────────────────────────────
+program
+  .command('learn')
+  .description('Learn from PR review comments to propose new knowledge nodes')
+  .option('--since <date>', 'Only fetch PRs merged after this date (YYYY-MM-DD)')
+  .option('--pr <number>', 'Fetch a specific PR by number')
+  .option('--auto-apply', 'Auto-apply nodes with confidence >= 0.85')
+  .option('--dry-run', 'Show proposals without writing nodes')
+  .action((options) => learnCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+// ── filer mcp ─────────────────────────────────────────────────────────────────
+program
+  .command('mcp')
+  .description('Start the Filer MCP server (stdio transport) for Claude Code / Cursor')
+  .action(() => mcpCommand().catch(err => {
+    console.error('MCP server error:', err.message);
+    process.exit(1);
+  }));
 
 program.parseAsync(process.argv).catch((err) => {
   console.error('\n  Error:', err.message, '\n');
