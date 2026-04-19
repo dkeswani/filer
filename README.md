@@ -1,195 +1,174 @@
 # Filer
 
-**Filer is the knowledge layer for codebases — structured context for AI agents.**
+**The knowledge layer for codebases.**
 
-AI agents write better code when they know the invisible rules: the constraint that can't be expressed in the type system, the danger that's burned three engineers, the pattern your team agreed on two years ago. Filer extracts that knowledge from your code and stores it in a structured, queryable format that agents load before every session.
+Filer extracts the institutional knowledge locked inside your codebase — constraints, patterns, dangers, security rules, decisions, antipatterns — and makes it available to AI coding agents as structured context before they write a single line of code.
+
+Without Filer, every agent session starts from zero. The agent reads code, guesses at conventions, misses invisible rules, and produces output that fails code review. With Filer, agents start informed — they know what this codebase must never do, where it breaks non-obviously, what patterns the team follows, and what has been tried and failed.
+
+The result: fewer revision cycles, fewer "we don't do it this way here" review comments, and agents that write code that fits.
 
 ---
 
-## Quickstart (5 minutes)
+## How It Works
 
-### 1. Install
+Filer reads your source code and uses an LLM to extract structured knowledge nodes into a `.filer/` directory committed alongside your code. A `filer.md` file in your repo root tells AI agents how to load and use this context.
+
+
+your-repo/
+├── src/
+├── filer.md          ← agent instructions (load this first)
+└── .filer/
+├── index.json    ← master manifest
+├── constraint/   ← what this code must never do
+├── danger/       ← where it breaks non-obviously
+├── security/     ← what must never be exposed or bypassed
+├── antipattern/  ← what looks right but is wrong here
+├── pattern/      ← the local dialect
+├── assumption/   ← what the code silently relies on
+├── intent/       ← what each module owns and does not own
+└── decision/     ← why non-obvious choices were made
+
+The `.filer/` directory is committed to the repo. Every developer, every agent, every CI run starts with the same accumulated knowledge.
+
+---
+
+## Quickstart
 
 ```bash
 npm install -g @filer/cli
 ```
 
-### 2. Initialize your repo
+**Initialize Filer in your repo:**
 
 ```bash
 cd your-repo
 filer init
 ```
 
-This creates `.filer/`, writes `filer.md`, installs a git post-commit hook, and generates `.claude/mcp.json` for Claude Code / Cursor.
-
-Set your API key:
+**Build the knowledge layer:**
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-### 3. Build the knowledge layer
-
-```bash
 filer index
 ```
 
-Filer scans your source files, groups them into modules, and extracts up to 8 node types per module using Claude. Extraction takes 2–10 minutes depending on repo size.
-
-### 4. Load context before coding sessions
-
-Add this to your `CLAUDE.md` (or equivalent agent config):
+**Add the agent instruction to your CLAUDE.md, AGENTS.md, or .cursorrules:**
 
 ```markdown
-## Before writing any code
+## Filer Knowledge Layer
 
-Read `filer.md` in this repository. It contains instructions for loading
-the Filer knowledge layer — constraints, dangers, security rules, and patterns
-specific to this codebase.
+Before writing any code, read filer.md in the repo root and follow
+the Filer loading protocol.
 ```
 
-### 5. Use the MCP server (Claude Code / Cursor)
+**Check coverage:**
 
-`.claude/mcp.json` is written by `filer init`:
-
-```json
-{
-  "mcpServers": {
-    "filer": {
-      "command": "filer",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+filer stats
 ```
-
-Once registered, agents can call `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, and `filer_check` directly during coding sessions without manually reading files.
-
----
-
-## How agents load context
-
-The `filer.md` file written to your repo root tells agents exactly what to load:
-
-1. Read `.filer/index.json` — lists all nodes with scope and summary
-2. Filter nodes by `scope` matching the files you will touch
-3. Load **all** `security` nodes in scope — absolute rules, never violate
-4. Load **all** `constraint` nodes in scope — hard architectural boundaries
-5. Load `danger` nodes — known non-obvious failure modes
-6. Load `assumption` nodes for modules you call or import from
-7. Load `pattern` nodes to understand the local coding dialect
-8. Load `antipattern` nodes — approaches that look right but are wrong here
-
----
-
-## Node type reference
-
-| Type | Priority | What it captures |
-|---|---|---|
-| `security` | CRITICAL | Rules that must never be violated — auth, data exposure, secrets, compliance |
-| `constraint` | CRITICAL | Hard architectural boundaries enforced by convention, not the type system |
-| `danger` | HIGH | Non-obvious failure modes — silent failures, race conditions, historical bugs |
-| `assumption` | HIGH | Implicit dependencies a caller could violate without knowing it |
-| `antipattern` | HIGH | Approaches that look correct but are specifically wrong in this codebase |
-| `pattern` | MEDIUM | The local dialect — how this codebase solves recurring problems |
-| `intent` | MEDIUM | What a module owns and explicitly does not own |
-| `decision` | LOW | Why a non-obvious architectural choice was made, with rejected alternatives |
-
-Every node has: `id`, `type`, `scope`, `confidence`, `tags`, `verified`, `stale_risk`, `related`.
 
 ---
 
 ## Commands
 
-```bash
-filer init                              # Initialize Filer in the current repo
-filer index                             # Full LLM extraction — builds the knowledge layer
-filer update                            # Incremental update from last git commit
-filer stats                             # Coverage dashboard
-filer show [id]                         # Display nodes (filter by --type, --scope, --verified)
-filer query "<question>"                # Keyword match + LLM-synthesized answer with citations
-filer verify                            # Interactive y/n verification workflow
-filer hook install|uninstall|status     # Manage git post-commit hook
-filer learn                             # Learn from PR review comments (requires GITHUB_TOKEN)
-filer measure                           # Compute productivity metrics from GitHub PRs
-filer benchmark                         # Score LLM responses with/without Filer context
-filer mcp                               # Start MCP server (stdio) for Claude Code / Cursor
-```
+| Command | Description |
+|---------|-------------|
+| `filer init` | Initialize Filer in the current repository |
+| `filer index` | Build the full knowledge layer from your codebase |
+| `filer update` | Incremental update from last git commit |
+| `filer stats` | Coverage and freshness dashboard |
+| `filer show` | Display knowledge nodes |
+| `filer query "question"` | Ask a natural language question about the codebase |
+| `filer verify` | Interactive human verification workflow |
+| `filer hook install` | Install git post-commit hook for auto-updates |
+| `filer learn` | Learn from PR review comments *(coming soon)* |
 
 ---
 
-## filer learn
+## LLM Providers
 
-`filer learn` closes the loop: it mines your PR review history and turns reviewer feedback into new knowledge nodes.
+Filer works with any capable LLM. Configure via `filer init`:
 
-```bash
-filer learn                        # Scan all merged PRs
-filer learn --since 2026-01-01     # Only PRs merged after this date
-filer learn --pr 147               # Single PR
-filer learn --auto-apply           # Apply nodes with confidence >= 0.85 without prompting
-filer learn --dry-run              # Preview proposals without writing anything
-```
-
-Requires `GITHUB_TOKEN` with `repo` scope.
-
-**How it works:**
-
-1. Fetches PR review comments from GitHub
-2. Classifies each comment as institutional knowledge signal or technical correction (Haiku)
-3. Clusters similar signals across PRs by keyword similarity
-4. Cross-references clusters against existing `.filer/` nodes — new vs. update
-5. Proposes new or updated nodes from each gap (Sonnet)
-6. Interactive apply workflow — view the proposal and its evidence, then apply or skip
-
-The goal: every pattern a senior engineer has to point out in code review eventually becomes a node that agents see before writing the code.
+| Provider | Models | Setup |
+|----------|--------|-------|
+| Anthropic | claude-sonnet-4-6, claude-haiku | `ANTHROPIC_API_KEY` |
+| OpenAI | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
+| Ollama | llama3.3, any local model | No key needed |
 
 ---
 
-## filer measure
+## Node Types
 
-Quantify the impact of your knowledge layer using real PR data:
+Filer extracts 8 types of knowledge, each answering a different question an agent needs before coding:
 
-```bash
-filer measure                             # All merged PRs
-filer measure --since 2026-01-01          # Since a date
-filer measure --before-after 2026-03-01   # Compare metrics before and after Filer adoption
-filer measure --pr 147                    # Single PR
-```
-
-Metrics:
-- **Constraint violation rate** — PRs that touch a `must_not` pattern from a constraint or security node
-- **PR iteration count** — avg commits per PR before merge, by author
-- **Review comment distribution** — classified as convention / constraint / logic / style
-
----
-
-## Environment variables
-
-```bash
-ANTHROPIC_API_KEY   # Anthropic provider (default)
-OPENAI_API_KEY      # OpenAI provider
-GITHUB_TOKEN        # Required for filer learn and filer measure
-```
+| Type | Question | Priority |
+|------|----------|----------|
+| `security` | What must never be exposed or bypassed? | Critical |
+| `constraint` | What must this code never do? | Critical |
+| `danger` | Where does this break non-obviously? | High |
+| `assumption` | What does this silently rely on? | High |
+| `antipattern` | What looks right but is wrong here? | High |
+| `pattern` | What is the local dialect? | Medium |
+| `intent` | What does this module own and not own? | Medium |
+| `decision` | Why was this done this way? | Lower |
 
 ---
 
-## LLM providers
+## The Quality Bar
 
-```bash
-filer init --provider anthropic   # Claude Sonnet 4.6 + Haiku 4.5 (default)
-filer init --provider openai      # GPT-4o + GPT-4o-mini
-filer init --provider ollama      # Local Ollama (llama3.3)
-```
+Zero nodes is better than wrong nodes.
+
+An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence threshold on every node and requires human verification for security nodes. The `filer verify` command provides an interactive workflow for reviewing LLM-inferred nodes before they are trusted.
 
 ---
 
-## Quality bar
+## The Learning Loop
 
-Zero nodes is better than low-quality nodes. Filer will not emit a node with confidence below 0.75, and will not emit more than 8 nodes per module. An agent that loads a Filer node trusts it — a wrong constraint is worse than no constraint.
+Filer gets smarter with every code review cycle. `filer learn` reads PR review comments from GitHub, identifies patterns like "we don't do it this way here", and proposes new or updated knowledge nodes. If an agent has to be told the same thing twice, Filer failed — `filer learn` closes that gap.
+
+*(Coming in v1.1)*
+
+---
+
+## Contributing
+
+Filer is MIT licensed and built for the community. Contributions are welcome across three areas:
+
+**Extraction prompts** — The quality of Filer's output depends entirely on the extraction prompts in `src/llm/prompts.ts`. Better prompts for specific languages, frameworks, or domains are the highest-value contribution. If Filer produces low-quality nodes for your stack, improve the prompt and submit a PR.
+
+**Node schema** — The 8 node types cover the most common knowledge patterns. If you encounter knowledge that doesn't fit any existing type, open an issue describing what you're trying to capture and why it matters for agents.
+
+**Language support** — The schema is language-agnostic but the extraction prompts are tuned for TypeScript and Python. PRs adding prompt variants for Go, Rust, Java, Ruby, and other languages are welcome.
+
+**To contribute:**
+
+```bash
+git clone https://github.com/dkeswani/filer.git
+cd filer
+npm install
+npm test          # 68 tests — all should pass before and after your change
+npx tsc --noEmit  # TypeScript must be clean
+```
+
+Open a PR with a clear description of what you changed and why. For prompt improvements, include before/after examples of node output on a real codebase.
+
+---
+
+## Why This Exists
+
+Every codebase contains two things: instructions for a computer, and the accumulated knowledge of every person who ever worked on it. The first part is perfectly readable by machines. The second part is almost completely invisible — buried in commit messages, PR discussions, Slack threads, and people's memories.
+
+When an AI agent starts a session, it has the first part. It has almost none of the second. Filer brings the second part inside the repo, structures it for machine consumption, and makes it available to every agent that works on the codebase — from day one, forever.
+
+The README told you how to run the code. Filer tells agents how to understand it.
 
 ---
 
 ## License
 
-MIT
+MIT — use it, modify it, embed it. No restrictions.
+
+---
+
+*Built by [@dkeswani](https://github.com/dkeswani)*
