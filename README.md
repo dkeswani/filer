@@ -14,22 +14,21 @@ The result: fewer revision cycles, fewer "we don't do it this way here" review c
 
 Filer reads your source code and uses an LLM to extract structured knowledge nodes into a `.filer/` directory committed alongside your code. A `filer.md` file in your repo root tells AI agents how to load and use this context.
 
-
+```
 your-repo/
 ├── src/
-├── filer.md          ← agent instructions (load this first)
+├── filer.md              ← agent instructions (load this first)
 └── .filer/
-├── index.json    ← master manifest
-├── constraint/   ← what this code must never do
-├── danger/       ← where it breaks non-obviously
-├── security/     ← what must never be exposed or bypassed
-├── antipattern/  ← what looks right but is wrong here
-├── pattern/      ← the local dialect
-├── assumption/   ← what the code silently relies on
-├── intent/       ← what each module owns and does not own
-└── decision/     ← why non-obvious choices were made
-
-The `.filer/` directory is committed to the repo. Every developer, every agent, every CI run starts with the same accumulated knowledge.
+    ├── index.json        ← master manifest
+    ├── constraint/       ← what this code must never do
+    ├── danger/           ← where it breaks non-obviously
+    ├── security/         ← what must never be exposed or bypassed
+    ├── antipattern/      ← what looks right but is wrong here
+    ├── pattern/          ← the local dialect
+    ├── assumption/       ← what the code silently relies on
+    ├── intent/           ← what each module owns and does not own
+    └── decision/         ← why non-obvious choices were made
+```
 
 ---
 

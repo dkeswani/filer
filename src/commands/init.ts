@@ -134,6 +134,10 @@ export async function initCommand(options: InitOptions): Promise<void> {
   writeFilerMd(root);
   console.log(chalk.green('  ✓') + chalk.dim('  Wrote filer.md (agent instructions)'));
 
+  // Write .claude/mcp.json template
+  writeClaudeMcp(root);
+  console.log(chalk.green('  ✓') + chalk.dim('  Wrote .claude/mcp.json (MCP server config)'));
+
   // Install git hook
   if (!options.noHook) {
     const hookInstalled = installGitHook(root);
@@ -258,4 +262,24 @@ filer stats     # coverage and freshness report
 `;
 
   fs.writeFileSync(path.join(root, 'filer.md'), content, 'utf-8');
+}
+
+function writeClaudeMcp(root: string): void {
+  const claudeDir = path.join(root, '.claude');
+  const mcpPath   = path.join(claudeDir, 'mcp.json');
+
+  if (fs.existsSync(mcpPath)) return;
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+
+  const config = {
+    mcpServers: {
+      filer: {
+        command: 'filer',
+        args: ['mcp'],
+      },
+    },
+  };
+
+  fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
 }
