@@ -35,24 +35,13 @@ your-repo/
 ## Quickstart
 
 ```bash
-npm install -g @filer/cli
-```
-
-**Initialize Filer in your repo:**
-
-```bash
 cd your-repo
-filer init
+npx @filer/cli@latest
 ```
 
-**Build the knowledge layer:**
+That's it. The wizard detects your project type, prompts for an API key if needed, estimates the cost, and builds the knowledge layer. When it's done it shows the most important finding it extracted.
 
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-filer index
-```
-
-**Add the agent instruction to your CLAUDE.md, AGENTS.md, or .cursorrules:**
+**Then add to your CLAUDE.md, AGENTS.md, or .cursorrules:**
 
 ```markdown
 ## Filer Knowledge Layer
@@ -61,9 +50,10 @@ Before writing any code, read filer.md in the repo root and follow
 the Filer loading protocol.
 ```
 
-**Check coverage:**
+**Or install globally for repeated use:**
 
 ```bash
+npm install -g @filer/cli
 filer stats
 ```
 
@@ -146,7 +136,7 @@ Filer is MIT licensed and built for the community. Contributions are welcome acr
 git clone https://github.com/dkeswani/filer.git
 cd filer
 npm install
-npm test          # 68 tests — all should pass before and after your change
+npm test          # 146 tests — all should pass before and after your change
 npx tsc --noEmit  # TypeScript must be clean
 ```
 

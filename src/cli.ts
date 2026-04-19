@@ -16,6 +16,8 @@ import { learnCommand }     from './commands/learn.js';
 import { measureCommand }   from './commands/measure.js';
 import { benchmarkCommand } from './commands/benchmark.js';
 import { mcpCommand }       from './commands/mcp.js';
+import { wizardCommand }    from './commands/wizard.js';
+import { filerExists }      from './store/mod.js';
 
 const program = new Command();
 
@@ -156,6 +158,17 @@ program
     console.error('MCP server error:', err.message);
     process.exit(1);
   }));
+
+// ── Default action — wizard or stats ─────────────────────────────────────────
+program
+  .action(async () => {
+    const root = process.cwd();
+    if (!filerExists(root)) {
+      await wizardCommand();
+    } else {
+      await statsCommand();
+    }
+  });
 
 program.parseAsync(process.argv).catch((err) => {
   console.error('\n  Error:', err.message, '\n');
