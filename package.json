@@ -4,7 +4,7 @@
   "description": "Filer — the knowledge layer for codebases. Extracts constraints, patterns, dangers, and decisions for AI agents.",
   "type": "module",
   "bin": {
-    "filer": "./dist/cli.js"
+    "filer": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dkeswani/filer"
+    "url": "git+https://github.com/dkeswani/filer.git"
   },
   "homepage": "https://github.com/dkeswani/filer#readme",
   "bugs": {
