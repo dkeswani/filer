@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 import { initCommand }   from './commands/init.js';
 import { indexCommand }  from './commands/index.js';
 import { updateCommand } from './commands/update.js';
@@ -19,7 +22,7 @@ const program = new Command();
 program
   .name('filer')
   .description('The knowledge layer for codebases — structured context for AI agents')
-  .version('0.1.0');
+  .version(version);
 
 // ── filer init ────────────────────────────────────────────────────────────────
 program
