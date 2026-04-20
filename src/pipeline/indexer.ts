@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import ora   from 'ora';
+import pLimit from 'p-limit';
 import {
   scanFiles,
   groupIntoModules,
@@ -20,12 +21,14 @@ import { LLMGateway }    from '../llm/mod.js';
 import type { AnyNode }  from '../schema/mod.js';
 
 export interface IndexOptions {
-  root:       string;
-  scope?:     string;      // limit to a subdirectory
-  force?:     boolean;     // re-index already-indexed files
-  dryRun?:    boolean;
-  silent?:    boolean;
-  changedOnly?: string[];  // for incremental updates — only these file paths
+  root:         string;
+  scope?:       string;      // limit to a subdirectory
+  force?:       boolean;     // re-index already-indexed files
+  dryRun?:      boolean;
+  silent?:      boolean;
+  changedOnly?: string[];    // for incremental updates — only these file paths
+  concurrency?: number;      // parallel module processing (default: 1)
+  fast?:        boolean;     // use indexing_model for all tasks (faster + cheaper)
 }
 
 export interface IndexResult {
@@ -105,11 +108,27 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
   };
 
   const existingNodes = readAllNodes(root);
-  const existingById  = new Map(existingNodes.map(n => [n.id, n]));
 
-  for (let i = 0; i < modules.length; i++) {
-    const mod     = modules[i];
-    const spinner = silent ? null : ora(`  [${i + 1}/${modules.length}] ${mod.name}`).start();
+  // If --fast, patch gateway to route all tasks through indexing_model
+  if (opts.fast) {
+    const orig = (gateway as any).modelForTask.bind(gateway);
+    (gateway as any).modelForTask = () => config.llm.indexing_model;
+  }
+
+  const concurrency = Math.max(1, Math.min(10, opts.concurrency ?? 1));
+  const limit       = pLimit(concurrency);
+  const isParallel  = concurrency > 1;
+
+  // Shared progress state for parallel mode
+  let completed = 0;
+  const sharedSpinner = (!silent && isParallel)
+    ? ora(`  Indexing modules... (0/${modules.length})`).start()
+    : null;
+
+  const processModule = async (mod: Module, i: number): Promise<void> => {
+    const spinner = (!silent && !isParallel)
+      ? ora(`  [${i + 1}/${modules.length}] ${mod.name}`).start()
+      : null;
 
     try {
       const existingIds = existingNodes
@@ -127,27 +146,43 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
       result.estimated_usd   += extraction.estimated_usd;
 
       for (const node of extraction.nodes) {
-        // Apply minimum confidence from config
         const typeConfig = (config.node_types as any)?.[node.type];
         const minConf    = typeConfig?.min_confidence ?? 0.75;
         if (node.confidence < minConf) {
           result.nodes_rejected++;
           continue;
         }
-
         const { created } = upsertNode(root, node);
         if (created) result.nodes_created++;
         else         result.nodes_updated++;
       }
 
       result.modules_processed++;
-      spinner?.succeed(`  [${i + 1}/${modules.length}] ${mod.name} — ${extraction.nodes.length} nodes`);
+      completed++;
+
+      if (isParallel) {
+        sharedSpinner!.text = `  Indexing modules... (${completed}/${modules.length})`;
+      } else {
+        spinner?.succeed(`  [${i + 1}/${modules.length}] ${mod.name} — ${extraction.nodes.length} nodes`);
+      }
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      spinner?.fail(`  [${i + 1}/${modules.length}] ${mod.name} — error: ${msg}`);
+      completed++;
+      if (isParallel) {
+        sharedSpinner!.text = `  Indexing modules... (${completed}/${modules.length})`;
+        if (!silent) process.stderr.write(chalk.red(`\n  ✗ ${mod.name} — ${msg}\n`));
+      } else {
+        spinner?.fail(`  [${i + 1}/${modules.length}] ${mod.name} — error: ${msg}`);
+      }
       result.errors.push(`${mod.name}: ${msg}`);
     }
+  };
+
+  await Promise.all(modules.map((mod, i) => limit(() => processModule(mod, i))));
+
+  if (isParallel) {
+    sharedSpinner?.succeed(`  Indexed ${completed}/${modules.length} modules`);
   }
 
   // Rebuild index

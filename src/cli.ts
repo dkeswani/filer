@@ -57,6 +57,8 @@ program
   .option('--force', 'Re-index already-indexed files')
   .option('--dry-run', 'Show what would be indexed without writing')
   .option('--cost', 'Estimate LLM cost without making API calls')
+  .option('--parallel <n>', 'Process N modules concurrently. Higher values are faster but may hit API rate limits. Recommended: 3-5. Default: 1.', '1')
+  .option('--fast', 'Use indexing model (Haiku) for all modules — faster and cheaper')
   .action((options) => indexCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);

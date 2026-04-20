@@ -4,11 +4,13 @@ import { runIndex }                from '../pipeline/indexer.js';
 import { groupIntoModules, scanFiles } from '../pipeline/scanner.js';
 
 interface IndexOptions {
-  scope?:  string;
-  type?:   string;
-  force?:  boolean;
-  dryRun?: boolean;
-  cost?:   boolean;
+  scope?:    string;
+  type?:     string;
+  force?:    boolean;
+  dryRun?:   boolean;
+  cost?:     boolean;
+  parallel?: string;
+  fast?:     boolean;
 }
 
 export async function indexCommand(options: IndexOptions): Promise<void> {
@@ -55,11 +57,22 @@ export async function indexCommand(options: IndexOptions): Promise<void> {
     console.log(chalk.dim(`  Scope: ${options.scope}`));
   }
 
+  const concurrency = options.parallel ? parseInt(options.parallel, 10) : 1;
+
+  if (options.fast) {
+    console.log(chalk.dim('  Mode: fast (indexing model for all tasks)'));
+  }
+  if (concurrency > 1) {
+    console.log(chalk.dim(`  Concurrency: ${concurrency} modules in parallel`));
+  }
+
   const result = await runIndex({
     root,
-    scope:  options.scope,
-    force:  options.force,
-    dryRun: options.dryRun,
+    scope:       options.scope,
+    force:       options.force,
+    dryRun:      options.dryRun,
+    concurrency,
+    fast:        options.fast,
   });
 
   if (options.dryRun) return;

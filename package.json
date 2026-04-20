@@ -53,6 +53,7 @@
     "inquirer": "^12.3.0",
     "open": "^11.0.0",
     "ora": "^8.1.1",
+    "p-limit": "^7.3.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
