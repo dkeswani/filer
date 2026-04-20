@@ -26,7 +26,6 @@ program
   .description('The knowledge layer for codebases — structured context for AI agents')
   .version(version);
 
-// ── filer init ────────────────────────────────────────────────────────────────
 program
   .command('init')
   .description('Initialize Filer in the current repository')
@@ -36,13 +35,11 @@ program
   .option('--force', 'Reinitialize even if .filer/ already exists')
   .action((options) => initCommand(options));
 
-// ── filer stats ───────────────────────────────────────────────────────────────
 program
   .command('stats')
   .description('Show coverage and freshness summary')
   .action(() => statsCommand());
 
-// ── filer show ────────────────────────────────────────────────────────────────
 program
   .command('show [id]')
   .description('Display one or more knowledge nodes')
@@ -52,7 +49,6 @@ program
   .option('--json', 'Output raw JSON')
   .action((id, options) => showCommand(id, options));
 
-// ── filer index ───────────────────────────────────────────────────────────────
 program
   .command('index')
   .description('Build the full knowledge layer from your codebase')
@@ -66,7 +62,6 @@ program
     process.exit(1);
   }));
 
-// ── filer update ──────────────────────────────────────────────────────────────
 program
   .command('update')
   .description('Incremental update from last git commit')
@@ -77,7 +72,6 @@ program
     process.exit(1);
   }));
 
-// ── filer query ───────────────────────────────────────────────────────────────
 program
   .command('query <question>')
   .description('Ask a natural language question about the codebase knowledge')
@@ -90,7 +84,6 @@ program
     process.exit(1);
   }));
 
-// ── filer verify ──────────────────────────────────────────────────────────────
 program
   .command('verify')
   .description('Interactive node verification workflow')
@@ -102,7 +95,6 @@ program
     process.exit(1);
   }));
 
-// ── filer hook ────────────────────────────────────────────────────────────────
 program
   .command('hook <action>')
   .description('Manage git post-commit hook (install | uninstall | status)')
@@ -111,7 +103,6 @@ program
     process.exit(1);
   }));
 
-// ── filer learn ───────────────────────────────────────────────────────────────
 program
   .command('learn')
   .description('Learn from PR review comments to propose new knowledge nodes')
@@ -124,7 +115,6 @@ program
     process.exit(1);
   }));
 
-// ── filer measure ─────────────────────────────────────────────────────────────
 program
   .command('measure')
   .description('Compute productivity metrics from GitHub PR data')
@@ -137,20 +127,19 @@ program
     process.exit(1);
   }));
 
-// ── filer benchmark ───────────────────────────────────────────────────────────
 program
   .command('benchmark')
   .description('Run identical tasks with/without Filer context and score outputs')
-  .option('--task <name>', 'Task to benchmark: implement-feature | review-code | debug-issue', 'implement-feature')
-  .option('--scope <path>', 'Scope path to load knowledge nodes from', 'src/')
+  .option('--task <n>', 'Task to benchmark: implement-feature | review-code | debug-issue')
+  .option('--scope <path>', 'Scope to load knowledge nodes from (auto-detected if not set)')
   .option('--runs <n>', 'Number of runs per variant', '3')
   .option('--output <file>', 'Save full report as JSON to this path')
+  .option('--dry-run', 'Show what would run without making API calls')
   .action((options) => benchmarkCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);
   }));
 
-// ── filer mcp ─────────────────────────────────────────────────────────────────
 program
   .command('mcp')
   .description('Start the Filer MCP server (stdio transport) for Claude Code / Cursor')
@@ -159,7 +148,6 @@ program
     process.exit(1);
   }));
 
-// ── Default action — wizard or stats ─────────────────────────────────────────
 program
   .action(async () => {
     const root = process.cwd();

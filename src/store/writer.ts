@@ -211,8 +211,13 @@ function scopeMatches(nodeScope: string, filePath: string): boolean {
   // Normalize: strip trailing slashes and glob wildcards for comparison
   const cleanScope = nodeScope.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
   const cleanFile  = filePath.replace(/\/$/, '');
-  // File must start with the scope path (exact prefix match)
-  return cleanFile.startsWith(cleanScope + '/') || cleanFile === cleanScope;
+  // Bidirectional prefix match:
+  // - query file is under node scope dir (e.g. node=frontend/src, query=frontend/src/app/page.tsx)
+  // - node scope is under query dir (e.g. node=frontend/src/app/page.tsx, query=frontend/src)
+  return cleanFile.startsWith(cleanScope + '/')
+    || cleanFile === cleanScope
+    || cleanScope.startsWith(cleanFile + '/')
+    || cleanScope === cleanFile;
 }
 
 function anyScopeMatches(nodeScopes: string[], filePaths: string[]): boolean {
