@@ -10,9 +10,27 @@ The result: fewer revision cycles, fewer "we don't do it this way here" review c
 
 ---
 
-## How It Works
+## Get Started in One Command
 
-Filer reads your source code and uses an LLM to extract structured knowledge nodes into a `.filer/` directory committed alongside your code. A `filer.md` file in your repo root tells AI agents how to load and use this context.
+```bash
+cd your-repo
+npx @filer/cli@latest
+```
+
+No install needed. The wizard runs automatically and guides you through everything:
+
+1. **Detects your project type** — Next.js, Python/FastAPI, Express, Go, Rust, TypeScript, and more
+2. **Asks which LLM provider** — Anthropic (default), OpenAI, or local Ollama
+3. **Handles your API key** — finds it in your environment, or prompts and saves it to `.env`
+4. **Shows a cost estimate** — with a 5-second countdown before any API calls are made (Ctrl+C to cancel)
+5. **Builds the knowledge layer** — scans your code, extracts nodes, shows live progress
+6. **Highlights the top finding** — the most important thing it found (critical security issues first)
+
+When the wizard finishes, your repo has a `.filer/` directory committed alongside your code, and a `filer.md` that tells agents how to load it.
+
+---
+
+## What the Wizard Produces
 
 ```
 your-repo/
@@ -30,60 +48,67 @@ your-repo/
     └── decision/         ← why non-obvious choices were made
 ```
 
+The `.filer/` directory is committed to the repo. Every developer and every agent starts with the same accumulated knowledge.
+
 ---
 
-## Quickstart
+## Wire It Into Your Agent
 
-```bash
-cd your-repo
-npx @filer/cli@latest
-```
-
-That's it. The wizard detects your project type, prompts for an API key if needed, estimates the cost, and builds the knowledge layer. When it's done it shows the most important finding it extracted.
-
-**Then add to your CLAUDE.md, AGENTS.md, or .cursorrules:**
+After the wizard runs, add one line to your `CLAUDE.md`, `AGENTS.md`, or `.cursorrules`:
 
 ```markdown
-## Filer Knowledge Layer
-
-Before writing any code, read filer.md in the repo root and follow
-the Filer loading protocol.
+Before writing any code, read filer.md in the repo root and follow the Filer loading protocol.
 ```
 
-**Or install globally for repeated use:**
+That's the entire integration. The agent reads `filer.md`, loads the nodes relevant to the files it's about to touch, and starts informed.
 
-```bash
-npm install -g @filer/cli
-filer stats
-```
+**For Claude Code specifically**, the wizard also writes `.claude/mcp.json` so the Filer MCP server is available as tools during agent sessions — no manual setup needed.
 
 ---
 
-## Commands
+## After the Wizard
+
+```bash
+filer stats                    # coverage dashboard — how much of your code is covered
+filer verify                   # review and approve extracted nodes interactively
+filer query "your question"    # ask a natural language question about the codebase
+filer show --type security     # view all security nodes
+filer learn                    # mine PR review comments to propose new nodes
+```
+
+Filer installs a git post-commit hook during `init`. After each commit, `filer update` runs automatically and re-indexes changed files. The knowledge layer stays current without manual work.
+
+---
+
+## All Commands
 
 | Command | Description |
 |---------|-------------|
-| `filer init` | Initialize Filer in the current repository |
-| `filer index` | Build the full knowledge layer from your codebase |
+| `filer` | Run the setup wizard (first time) or show stats (subsequent runs) |
+| `filer init` | Initialize without the wizard |
+| `filer index` | Build or rebuild the full knowledge layer |
 | `filer update` | Incremental update from last git commit |
 | `filer stats` | Coverage and freshness dashboard |
-| `filer show` | Display knowledge nodes |
-| `filer query "question"` | Ask a natural language question about the codebase |
-| `filer verify` | Interactive human verification workflow |
-| `filer hook install` | Install git post-commit hook for auto-updates |
-| `filer learn` | Learn from PR review comments *(coming soon)* |
+| `filer show [id]` | Display knowledge nodes — filter by `--type`, `--scope`, `--verified` |
+| `filer query "<question>"` | Keyword match + LLM-synthesized answer with node citations |
+| `filer verify` | Interactive y/n verification workflow |
+| `filer hook install\|uninstall\|status` | Manage git post-commit hook |
+| `filer learn` | Learn from PR review comments, propose new nodes |
+| `filer measure` | Compute productivity metrics from GitHub PR history |
+| `filer benchmark` | Score LLM responses with vs. without Filer context |
+| `filer mcp` | Start MCP server (stdio) for Claude Code / Cursor |
 
 ---
 
 ## LLM Providers
 
-Filer works with any capable LLM. Configure via `filer init`:
-
-| Provider | Models | Setup |
-|----------|--------|-------|
-| Anthropic | claude-sonnet-4-6, claude-haiku | `ANTHROPIC_API_KEY` |
+| Provider | Models | Env Var |
+|----------|--------|---------|
+| Anthropic *(default)* | claude-sonnet-4-6, claude-haiku-4-5 | `ANTHROPIC_API_KEY` |
 | OpenAI | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| Ollama | llama3.3, any local model | No key needed |
+| Ollama | llama3.3, any local model | *(none)* |
+
+Switch provider at any time by re-running `filer init --provider openai`.
 
 ---
 
@@ -91,8 +116,8 @@ Filer works with any capable LLM. Configure via `filer init`:
 
 Filer extracts 8 types of knowledge, each answering a different question an agent needs before coding:
 
-| Type | Question | Priority |
-|------|----------|----------|
+| Type | Question it answers | Priority |
+|------|---------------------|----------|
 | `security` | What must never be exposed or bypassed? | Critical |
 | `constraint` | What must this code never do? | Critical |
 | `danger` | Where does this break non-obviously? | High |
@@ -104,43 +129,50 @@ Filer extracts 8 types of knowledge, each answering a different question an agen
 
 ---
 
+## The Learning Loop
+
+`filer learn` closes the feedback loop between code review and the knowledge layer.
+
+It fetches PR review comments from GitHub, classifies each one as an institutional knowledge signal ("we don't do it this way here") vs. a technical correction, clusters similar signals across PRs, and proposes new or updated nodes. You review each proposal with its evidence chain and apply or skip.
+
+```bash
+filer learn                       # scan all merged PRs
+filer learn --since 2026-01-01    # from a specific date
+filer learn --pr 147              # single PR
+filer learn --auto-apply          # apply high-confidence nodes without review
+```
+
+Requires `GITHUB_TOKEN` in your environment.
+
+If an agent has to be told the same thing twice in code review, Filer failed. `filer learn` closes that gap.
+
+---
+
 ## The Quality Bar
 
 Zero nodes is better than wrong nodes.
 
-An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence threshold on every node and requires human verification for security nodes. The `filer verify` command provides an interactive workflow for reviewing LLM-inferred nodes before they are trusted.
-
----
-
-## The Learning Loop
-
-Filer gets smarter with every code review cycle. `filer learn` reads PR review comments from GitHub, identifies patterns like "we don't do it this way here", and proposes new or updated knowledge nodes. If an agent has to be told the same thing twice, Filer failed — `filer learn` closes that gap.
-
-*(Coming in v1.1)*
+An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence threshold (0.75) on every node and requires human verification for security nodes. The `filer verify` command provides an interactive workflow for reviewing LLM-inferred nodes.
 
 ---
 
 ## Contributing
 
-Filer is MIT licensed and built for the community. Contributions are welcome across three areas:
+Filer is MIT licensed. Contributions are welcome across three areas:
 
-**Extraction prompts** — The quality of Filer's output depends entirely on the extraction prompts in `src/llm/prompts.ts`. Better prompts for specific languages, frameworks, or domains are the highest-value contribution. If Filer produces low-quality nodes for your stack, improve the prompt and submit a PR.
+**Extraction prompts** — The quality of output depends entirely on the prompts in `src/llm/prompts.ts`. Better prompts for specific languages, frameworks, or domains are the highest-value contribution.
 
-**Node schema** — The 8 node types cover the most common knowledge patterns. If you encounter knowledge that doesn't fit any existing type, open an issue describing what you're trying to capture and why it matters for agents.
+**Node schema** — The 8 node types cover the most common patterns. If you encounter knowledge that doesn't fit, open an issue.
 
-**Language support** — The schema is language-agnostic but the extraction prompts are tuned for TypeScript and Python. PRs adding prompt variants for Go, Rust, Java, Ruby, and other languages are welcome.
-
-**To contribute:**
+**Language support** — Prompts are tuned for TypeScript and Python. PRs adding variants for Go, Rust, Java, Ruby, and others are welcome.
 
 ```bash
 git clone https://github.com/dkeswani/filer.git
 cd filer
 npm install
-npm test          # 146 tests — all should pass before and after your change
+npm test          # 146 tests — all must pass before and after your change
 npx tsc --noEmit  # TypeScript must be clean
 ```
-
-Open a PR with a clear description of what you changed and why. For prompt improvements, include before/after examples of node output on a real codebase.
 
 ---
 
