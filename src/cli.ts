@@ -17,6 +17,8 @@ import { measureCommand }   from './commands/measure.js';
 import { benchmarkCommand } from './commands/benchmark.js';
 import { mcpCommand }       from './commands/mcp.js';
 import { wizardCommand }    from './commands/wizard.js';
+import { scanCommand }      from './commands/scan.js';
+import { layerCommand }     from './commands/layer.js';
 import { filerExists }      from './store/mod.js';
 
 const program = new Command();
@@ -48,6 +50,32 @@ program
   .option('--verified', 'Show only verified nodes')
   .option('--json', 'Output raw JSON')
   .action((id, options) => showCommand(id, options));
+
+program
+  .command('scan')
+  .description('Scan codebase and generate an HTML security report')
+  .option('--output <path>', 'Output path for HTML report', '.filer/report.html')
+  .option('--scope <path>', 'Limit to a specific directory')
+  .option('--parallel <n>', 'Number of modules to process concurrently. Recommended: 3-5. Default: 1.', '1')
+  .option('--no-open', 'Do not auto-open report in browser')
+  .option('--force', 'Re-scan already-scanned files')
+  .action((options) => scanCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+program
+  .command('layer')
+  .description('Build the agent knowledge layer (commits .filer/ nodes for AI agents)')
+  .option('--scope <path>', 'Limit to a specific directory')
+  .option('--parallel <n>', 'Number of modules to process concurrently. Default: 1.', '1')
+  .option('--force', 'Re-index already-indexed files')
+  .option('--dry-run', 'Show what would be indexed without writing')
+  .option('--cost', 'Estimate LLM cost without making API calls')
+  .action((options) => layerCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
 program
   .command('index')
