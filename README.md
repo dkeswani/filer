@@ -17,16 +17,16 @@ cd your-repo
 npx @filer/cli@latest
 ```
 
-No install needed. The wizard runs automatically and guides you through everything:
+No install required. The interactive wizard guides you through everything in one session:
 
-1. **Detects your project type** — Next.js, Python/FastAPI, Express, Go, Rust, TypeScript, and more
+1. **Detects your project type** — Next.js, Python/FastAPI, Express, Go, Rust, TypeScript, JavaScript
 2. **Asks which LLM provider** — Anthropic (default), OpenAI, or local Ollama
-3. **Handles your API key** — finds it in your environment, or prompts and saves it to `.env`
-4. **Shows a cost estimate** — with a 5-second countdown before any API calls are made (Ctrl+C to cancel)
+3. **Handles your API key** — reads from environment, or prompts and saves it securely to `.env`
+4. **Shows a cost estimate** with a 5-second countdown before any API calls (Ctrl+C to cancel)
 5. **Builds the knowledge layer** — scans your code, extracts nodes, shows live progress
-6. **Highlights the top finding** — the most important thing it found (critical security issues first)
+6. **Highlights the top finding** — most critical security issue, or highest-confidence constraint
 
-When the wizard finishes, your repo has a `.filer/` directory committed alongside your code, and a `filer.md` that tells agents how to load it.
+When the wizard finishes, your repo has a committed `.filer/` directory and a `filer.md` that tells agents how to load it.
 
 ---
 
@@ -34,16 +34,17 @@ When the wizard finishes, your repo has a `.filer/` directory committed alongsid
 
 ```
 your-repo/
-├── src/
-├── filer.md              ← agent instructions (load this first)
+├── filer.md              ← agent instructions (read this first)
+├── .claude/
+│   └── mcp.json          ← MCP server config for Claude Code / Cursor
 └── .filer/
-    ├── index.json        ← master manifest
+    ├── index.json        ← master manifest of all nodes
+    ├── security/         ← what must never be exposed or bypassed
     ├── constraint/       ← what this code must never do
     ├── danger/           ← where it breaks non-obviously
-    ├── security/         ← what must never be exposed or bypassed
-    ├── antipattern/      ← what looks right but is wrong here
-    ├── pattern/          ← the local dialect
     ├── assumption/       ← what the code silently relies on
+    ├── antipattern/      ← what looks right but is wrong here
+    ├── pattern/          ← the local coding dialect
     ├── intent/           ← what each module owns and does not own
     └── decision/         ← why non-obvious choices were made
 ```
@@ -60,61 +61,126 @@ After the wizard runs, add one line to your `CLAUDE.md`, `AGENTS.md`, or `.curso
 Before writing any code, read filer.md in the repo root and follow the Filer loading protocol.
 ```
 
-That's the entire integration. The agent reads `filer.md`, loads the nodes relevant to the files it's about to touch, and starts informed.
-
-**For Claude Code specifically**, the wizard also writes `.claude/mcp.json` so the Filer MCP server is available as tools during agent sessions — no manual setup needed.
+**For Claude Code**, `.claude/mcp.json` is written automatically by the wizard — the Filer MCP server is immediately available as tools during agent sessions with no further setup.
 
 ---
 
-## After the Wizard
+## Daily Usage
 
 ```bash
-filer stats                    # coverage dashboard — how much of your code is covered
-filer verify                   # review and approve extracted nodes interactively
-filer query "your question"    # ask a natural language question about the codebase
-filer show --type security     # view all security nodes
-filer learn                    # mine PR review comments to propose new nodes
+filer stats                          # coverage dashboard
+filer verify                         # review and approve extracted nodes
+filer query "your question"          # ask the knowledge layer anything
+filer show --type security           # view all security nodes
+filer update                         # re-index after manual file changes
+filer learn                          # propose new nodes from PR review history
 ```
 
-Filer installs a git post-commit hook during `init`. After each commit, `filer update` runs automatically and re-indexes changed files. The knowledge layer stays current without manual work.
+The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
 
 ---
 
 ## All Commands
 
+### Core
+
 | Command | Description |
 |---------|-------------|
-| `filer` | Run the setup wizard (first time) or show stats (subsequent runs) |
-| `filer init` | Initialize without the wizard |
-| `filer index` | Build or rebuild the full knowledge layer |
-| `filer update` | Incremental update from last git commit |
+| `filer` | Run the setup wizard (first time) or show stats dashboard (already initialized) |
+| `filer init [options]` | Initialize without the wizard |
+| `filer index [options]` | Build or rebuild the full knowledge layer |
+| `filer update [options]` | Incremental re-index from last git commit |
 | `filer stats` | Coverage and freshness dashboard |
-| `filer show [id]` | Display knowledge nodes — filter by `--type`, `--scope`, `--verified` |
-| `filer query "<question>"` | Keyword match + LLM-synthesized answer with node citations |
-| `filer verify` | Interactive y/n verification workflow |
-| `filer hook install\|uninstall\|status` | Manage git post-commit hook |
-| `filer learn` | Learn from PR review comments, propose new nodes |
-| `filer measure` | Compute productivity metrics from GitHub PR history |
-| `filer benchmark` | Score LLM responses with vs. without Filer context |
-| `filer mcp` | Start MCP server (stdio) for Claude Code / Cursor |
+
+`filer init` options: `--provider anthropic|openai|ollama`, `--model <name>`, `--no-hook`, `--force`
+`filer index` options: `--scope <path>`, `--type <types>`, `--force`, `--dry-run`, `--cost`
+`filer update` options: `--since <git-ref>`, `--silent`
 
 ---
 
-## LLM Providers
+### Exploration
 
-| Provider | Models | Env Var |
-|----------|--------|---------|
-| Anthropic *(default)* | claude-sonnet-4-6, claude-haiku-4-5 | `ANTHROPIC_API_KEY` |
-| OpenAI | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| Ollama | llama3.3, any local model | *(none)* |
+| Command | Description |
+|---------|-------------|
+| `filer show [id]` | Display one or all nodes |
+| `filer query "<question>"` | Ask a natural language question — returns LLM-synthesized answer with node citations |
+| `filer verify` | Interactive y/n verification workflow |
 
-Switch provider at any time by re-running `filer init --provider openai`.
+`filer show` options: `--type <types>`, `--scope <path>`, `--verified`, `--json`
+`filer query` options: `--scope <path>`, `--type <types>`, `--no-llm` (skip synthesis, return matched nodes only), `--json`
+`filer verify` options: `--type <types>`, `--stale`, `--unverified-only`
+
+---
+
+### Git Hook
+
+| Command | Description |
+|---------|-------------|
+| `filer hook install` | Install git post-commit hook for automatic updates |
+| `filer hook uninstall` | Remove the hook |
+| `filer hook status` | Check hook installation state |
+
+---
+
+### Learning & Measurement
+
+| Command | Description |
+|---------|-------------|
+| `filer learn` | Mine PR review comments from GitHub and propose new knowledge nodes |
+| `filer measure` | Compute productivity metrics from GitHub PR history |
+| `filer benchmark` | Score LLM responses with vs. without Filer context loaded |
+
+`filer learn` options: `--since <date>`, `--pr <number>`, `--auto-apply`, `--dry-run`
+`filer measure` options: `--since <date>`, `--before <date>`, `--before-after <date>`, `--pr <number>`
+`filer benchmark` options: `--scope <path>`, `--task <name>`, `--runs <n>`, `--dry-run`
+
+---
+
+### MCP Server
+
+| Command | Description |
+|---------|-------------|
+| `filer mcp` | Start the MCP server (stdio transport) for Claude Code / Cursor |
+
+The MCP server exposes five tools: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`. Claude Code loads these automatically from `.claude/mcp.json`.
+
+---
+
+## filer learn
+
+`filer learn` closes the feedback loop between code review and the knowledge layer.
+
+It fetches PR review comments from GitHub, classifies each one as an institutional knowledge signal ("we don't do it this way here") vs. a routine technical correction, clusters similar signals across PRs, cross-references against existing `.filer/` nodes, and proposes new or updated nodes. You review each proposal with its evidence chain and apply or skip.
+
+```bash
+filer learn                        # all merged PRs
+filer learn --since 2026-01-01     # from a specific date
+filer learn --pr 147               # single PR
+filer learn --auto-apply           # apply nodes with confidence >= 0.85 without prompting
+filer learn --dry-run              # preview proposals without writing
+```
+
+Requires `GITHUB_TOKEN` in your environment.
+
+If an agent has to be told the same thing twice in code review, `filer learn` closes that gap.
+
+---
+
+## filer benchmark
+
+`filer benchmark` quantifies Filer's impact on code quality by running identical tasks with and without Filer context, then scoring outputs with an LLM judge.
+
+```bash
+filer benchmark                    # auto-detects scope, prompts for task
+filer benchmark --scope backend/   # specify scope manually
+filer benchmark --dry-run          # preview without making API calls
+```
+
+Reports avg score, token count, and latency for each variant, plus a delta score showing the lift from Filer context.
 
 ---
 
 ## Node Types
-
-Filer extracts 8 types of knowledge, each answering a different question an agent needs before coding:
 
 | Type | Question it answers | Priority |
 |------|---------------------|----------|
@@ -123,28 +189,21 @@ Filer extracts 8 types of knowledge, each answering a different question an agen
 | `danger` | Where does this break non-obviously? | High |
 | `assumption` | What does this silently rely on? | High |
 | `antipattern` | What looks right but is wrong here? | High |
-| `pattern` | What is the local dialect? | Medium |
+| `pattern` | What is the local coding dialect? | Medium |
 | `intent` | What does this module own and not own? | Medium |
 | `decision` | Why was this done this way? | Lower |
 
 ---
 
-## The Learning Loop
+## LLM Providers
 
-`filer learn` closes the feedback loop between code review and the knowledge layer.
+| Provider | Models used | Env var |
+|----------|-------------|---------|
+| Anthropic *(default)* | Sonnet 4.6 (deep), Haiku 4.5 (indexing) | `ANTHROPIC_API_KEY` |
+| OpenAI | GPT-4o (deep), GPT-4o-mini (indexing) | `OPENAI_API_KEY` |
+| Ollama | llama3.3 or any local model | *(none)* |
 
-It fetches PR review comments from GitHub, classifies each one as an institutional knowledge signal ("we don't do it this way here") vs. a technical correction, clusters similar signals across PRs, and proposes new or updated nodes. You review each proposal with its evidence chain and apply or skip.
-
-```bash
-filer learn                       # scan all merged PRs
-filer learn --since 2026-01-01    # from a specific date
-filer learn --pr 147              # single PR
-filer learn --auto-apply          # apply high-confidence nodes without review
-```
-
-Requires `GITHUB_TOKEN` in your environment.
-
-If an agent has to be told the same thing twice in code review, Filer failed. `filer learn` closes that gap.
+Switch provider: `filer init --provider openai --force`
 
 ---
 
@@ -152,19 +211,19 @@ If an agent has to be told the same thing twice in code review, Filer failed. `f
 
 Zero nodes is better than wrong nodes.
 
-An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence threshold (0.75) on every node and requires human verification for security nodes. The `filer verify` command provides an interactive workflow for reviewing LLM-inferred nodes.
+An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence of 0.75 on every node and requires human verification for security nodes. Use `filer verify` to review and approve LLM-inferred nodes before they are trusted.
 
 ---
 
 ## Contributing
 
-Filer is MIT licensed. Contributions are welcome across three areas:
+Filer is MIT licensed. The highest-value contributions are:
 
-**Extraction prompts** — The quality of output depends entirely on the prompts in `src/llm/prompts.ts`. Better prompts for specific languages, frameworks, or domains are the highest-value contribution.
+**Extraction prompts** — output quality depends entirely on `src/llm/prompts.ts`. Better prompts for specific languages, frameworks, or domains are the most impactful change you can make.
 
-**Node schema** — The 8 node types cover the most common patterns. If you encounter knowledge that doesn't fit, open an issue.
+**Node schema** — 8 node types cover the most common patterns. If you encounter knowledge that doesn't fit, open an issue.
 
-**Language support** — Prompts are tuned for TypeScript and Python. PRs adding variants for Go, Rust, Java, Ruby, and others are welcome.
+**Language support** — prompts are tuned for TypeScript and Python. PRs for Go, Rust, Java, Ruby, and others are welcome.
 
 ```bash
 git clone https://github.com/dkeswani/filer.git
