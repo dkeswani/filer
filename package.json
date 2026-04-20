@@ -51,11 +51,12 @@
     "commander": "^12.1.0",
     "glob": "^11.0.0",
     "inquirer": "^12.3.0",
+    "open": "^11.0.0",
     "ora": "^8.1.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.19.17",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0"
   }

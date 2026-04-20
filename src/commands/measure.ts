@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { filerExists, readAllNodes } from '../store/mod.js';
+import { getGitHubToken } from '../lib/github-auth.js';
 import type { AnyNode } from '../schema/mod.js';
 
 interface MeasureOptions {
@@ -131,11 +132,7 @@ export async function measureCommand(options: MeasureOptions): Promise<void> {
     process.exit(1);
   }
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error(chalk.red('\n  GITHUB_TOKEN env var is required.\n'));
-    process.exit(1);
-  }
+  const token = await getGitHubToken();
 
   const repoInfo = detectRepoInfo(root);
   if (!repoInfo) {

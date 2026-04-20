@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { execSync } from 'child_process';
+import { getGitHubToken } from '../lib/github-auth.js';
 import {
   filerExists,
   readAllNodes,
@@ -334,11 +335,7 @@ export async function learnCommand(options: LearnOptions): Promise<void> {
     process.exit(1);
   }
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error(chalk.red('\n  GITHUB_TOKEN env var is required.\n'));
-    process.exit(1);
-  }
+  const token = await getGitHubToken();
 
   const config = readConfig(root);
   if (!config) {
