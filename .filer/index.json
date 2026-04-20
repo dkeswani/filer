@@ -1,0 +1,25 @@
+{
+  "filer_version": "1.0",
+  "repo": "filer",
+  "indexed_at": "2026-04-20T16:12:05.712Z",
+  "last_commit": "10a7adb",
+  "llm": "claude-sonnet-4-6",
+  "stats": {
+    "files_indexed": 0,
+    "nodes_total": 0,
+    "by_type": {
+      "intent": 0,
+      "constraint": 0,
+      "assumption": 0,
+      "danger": 0,
+      "pattern": 0,
+      "decision": 0,
+      "security": 0,
+      "antipattern": 0
+    },
+    "coverage_pct": 0,
+    "verified_pct": 0,
+    "stale_count": 0
+  },
+  "nodes": []
+}
