@@ -43,6 +43,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'gpt-4o':                     { input: 2.50,  output: 10.00  },
   'gpt-4o-mini':                { input: 0.15,  output: 0.60   },
   'llama3.3':                   { input: 0.00,  output: 0.00   },  // local
+  'kimi-k2.6':                  { input: 0.50,  output: 2.80   },
 };
 
 export function estimateCost(res: LLMResponse): LLMCost {

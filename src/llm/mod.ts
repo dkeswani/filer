@@ -4,3 +4,4 @@ export * from './prompts.js';
 export { AnthropicProvider } from './anthropic.js';
 export { OpenAIProvider }   from './openai.js';
 export { OllamaProvider }   from './ollama.js';
+export { KimiProvider }     from './kimi.js';

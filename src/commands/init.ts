@@ -34,9 +34,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
   const provider = (options.provider ?? 'anthropic') as FilerConfig['llm']['provider'];
 
   // Validate provider
-  if (!['anthropic', 'openai', 'ollama'].includes(provider)) {
+  if (!['anthropic', 'openai', 'ollama', 'kimi'].includes(provider)) {
     console.error(chalk.red(`  Unknown provider: ${provider}`));
-    console.error(chalk.dim('  Supported: anthropic, openai, ollama\n'));
+    console.error(chalk.dim('  Supported: anthropic, openai, ollama, kimi\n'));
     process.exit(1);
   }
 
@@ -56,6 +56,11 @@ export async function initCommand(options: InitOptions): Promise<void> {
       model:    options.model ?? 'llama3.3',
       indexing: options.model ?? 'llama3.3',
       deep:     options.model ?? 'llama3.3',
+    },
+    kimi: {
+      model:    'kimi-k2.6',
+      indexing: 'kimi-k2.6',
+      deep:     'kimi-k2.6',
     },
   };
 
@@ -171,6 +176,14 @@ export async function initCommand(options: InitOptions): Promise<void> {
   } else if (provider === 'ollama') {
     console.log('  ' + chalk.dim('   Using Ollama at http://localhost:11434'));
     console.log('  ' + chalk.dim(`   Make sure ${model} is pulled: ollama pull ${model}\n`));
+  } else if (provider === 'kimi') {
+    if (process.env.MOONSHOT_API_KEY) {
+      console.log('  ' + chalk.green('✓  MOONSHOT_API_KEY found\n'));
+    } else {
+      console.log('  ' + chalk.yellow('⚠  MOONSHOT_API_KEY not set.'));
+      console.log('  ' + chalk.dim('   Get a key at: platform.moonshot.ai'));
+      console.log('  ' + chalk.dim('   Then: export MOONSHOT_API_KEY=sk-...\n'));
+    }
   }
 }
 

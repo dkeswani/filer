@@ -57,7 +57,7 @@ export const FilerConfigSchema = z.object({
   version: z.string().default('1.0'),
 
   llm: z.object({
-    provider:       z.enum(['anthropic', 'openai', 'ollama']).default('anthropic'),
+    provider:       z.enum(['anthropic', 'openai', 'ollama', 'kimi']).default('anthropic'),
     model:          z.string().default('claude-sonnet-4-6'),
     indexing_model: z.string().default('claude-haiku-4-5-20251001'),
     deep_model:     z.string().default('claude-sonnet-4-6'),

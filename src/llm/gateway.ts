@@ -3,6 +3,7 @@ import { estimateCost } from './types.js';
 import { AnthropicProvider } from './anthropic.js';
 import { OpenAIProvider }   from './openai.js';
 import { OllamaProvider }   from './ollama.js';
+import { KimiProvider }     from './kimi.js';
 import type { FilerConfig }  from '../schema/mod.js';
 
 // ── Task routing table ────────────────────────────────────────────────────────
@@ -127,6 +128,8 @@ export function createProvider(config: FilerConfig): LLMProvider {
       return new OpenAIProvider();
     case 'ollama':
       return new OllamaProvider(config.llm.base_url);
+    case 'kimi':
+      return new KimiProvider();
     default:
       throw new Error(`Unknown LLM provider: ${config.llm.provider}`);
   }
