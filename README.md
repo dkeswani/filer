@@ -1,12 +1,68 @@
 # Filer
 
-**The knowledge layer for codebases.**
+**The knowledge layer for codebases. Context packer. Security scanner. Self-updating agent.**
 
-Filer extracts the institutional knowledge locked inside your codebase — constraints, patterns, dangers, security rules, decisions, antipatterns — and makes it available to AI coding agents as structured context before they write a single line of code.
+Filer is a single CLI that does five things no other tool does together:
 
-Without Filer, every agent session starts from zero. The agent reads code, guesses at conventions, misses invisible rules, and produces output that fails code review. With Filer, agents start informed — they know what this codebase must never do, where it breaks non-obviously, what patterns the team follows, and what has been tried and failed.
+1. **Extracts institutional knowledge** from your codebase — constraints, security rules, dangers, patterns, decisions — and stores them as structured nodes in `.filer/` alongside your code.
+2. **Packs your codebase for AI** with `filer pack` — a full Repomix/Codebase Digest replacement that injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
+3. **Scans for security issues** with `filer scan` — generates an HTML severity report and integrates with CI via `--ci --fail-on high`.
+4. **Learns from code review** with `filer learn` — mines PR review comments from GitHub, identifies institutional knowledge signals, and proposes new nodes automatically.
+5. **Runs as an autonomous agent** with `filer agent` — an open-source, zero-dependency orchestrator that responds to git events, keeps the knowledge layer current, and posts to CI/CD pipelines.
 
-The result: fewer revision cycles, fewer "we don't do it this way here" review comments, and agents that write code that fits.
+No external framework. No commercial dependency. Ships as `npx @filer/cli@latest`.
+
+---
+
+## What It Looks Like
+
+**Pack your repo for an AI task — only the relevant files, with knowledge attached:**
+
+```bash
+filer pack --task "add Stripe webhook handler" --tokens 40000
+```
+
+Every file in the output arrives pre-annotated with the rules that govern it:
+
+```
+// ═══════════════════════════════════════════════════
+// FILER KNOWLEDGE — src/payments/webhook.ts
+// ═══════════════════════════════════════════════════
+// [FILER 🔴 SECURITY ✓] security:no-raw-webhook-logging
+//   Rule: Never log raw webhook payloads — contains PII
+//   If violated: PII exposure, GDPR breach
+//
+// [FILER 🟡 CONSTRAINT] constraint:verify-stripe-sig
+//   Rule: Always verify Stripe signature before processing
+// ═══════════════════════════════════════════════════
+
+export async function handleWebhook(req, res) { ...
+```
+
+The agent knows the rules before it writes a line. Not from comments in the code — from structured, versioned, LLM-verified nodes that travel with every `filer pack` output.
+
+**Run a security scan and ship the report to CI:**
+
+```bash
+filer scan --ci --fail-on high    # exits non-zero if any high/critical finding
+```
+
+**Let the agent keep itself up to date:**
+
+```bash
+# .github/workflows/filer.yml — copy from templates/filer.yml
+filer agent --event commit        # re-index changed files after push
+filer agent --event pr_merged --pr 142 --auto-apply  # mine review comments → new nodes
+filer agent --event scheduled     # nightly LLM staleness check
+```
+
+**Drop in for Repomix or Codebase Digest — no flag changes:**
+
+```bash
+repomix --output out.xml --style xml   →  filer pack --output out.xml --format xml
+repomix --remote user/repo             →  filer pack --remote user/repo
+codebase-digest --max-tokens 40000     →  filer pack --tokens 40000
+```
 
 ---
 
@@ -17,28 +73,32 @@ cd your-repo
 npx @filer/cli@latest
 ```
 
-No install required. The interactive wizard guides you through everything in one session:
+No install required. The interactive wizard runs in one session:
 
 1. **Detects your project type** — Next.js, Python/FastAPI, Express, Go, Rust, TypeScript, JavaScript
-2. **Asks which LLM provider** — Anthropic (default), OpenAI, Kimi, or local Ollama
-3. **Handles your API key** — reads from environment, or prompts and saves it securely to `.env`
+2. **Asks which LLM provider** — Anthropic (default), OpenAI, Kimi (~80% cheaper), or local Ollama
+3. **Handles your API key** — reads from environment, or prompts and saves to `.env`
 4. **Shows a cost estimate** with a 5-second countdown before any API calls (Ctrl+C to cancel)
-5. **Builds the knowledge layer** — scans your code, extracts nodes, shows live progress
-6. **Highlights the top finding** — most critical security issue, or highest-confidence constraint
+5. **Builds the knowledge layer** — scans your codebase, extracts nodes, shows live progress
+6. **Highlights the top finding** — most critical security issue or highest-confidence constraint
 
-When the wizard finishes, your repo has a committed `.filer/` directory and a `filer.md` that tells agents how to load it.
+When the wizard finishes, your repo has a committed `.filer/` directory, a `filer.md` that tells agents how to load it, and a `.claude/mcp.json` wiring Filer into Claude Code automatically.
 
 ---
 
-## What the Wizard Produces
+## What Gets Created
 
 ```
 your-repo/
-├── filer.md              ← agent instructions (read this first)
+├── filer.md              ← agent instructions: how to load the knowledge layer
 ├── .claude/
-│   └── mcp.json          ← MCP server config for Claude Code / Cursor
+│   └── mcp.json          ← MCP server config — Filer tools available in Claude Code immediately
 └── .filer/
     ├── index.json        ← master manifest of all nodes
+    ├── agent-log.md      ← audit trail of every agent run
+    ├── review/
+    │   ├── pending.json  ← machine-readable review bundle for agents + humans
+    │   └── report.html   ← HTML review UI — approve/reject/amend in browser
     ├── security/         ← what must never be exposed or bypassed
     ├── constraint/       ← what this code must never do
     ├── danger/           ← where it breaks non-obviously
@@ -55,37 +115,52 @@ The `.filer/` directory is committed to the repo. Every developer and every agen
 
 ## Wire It Into Your Agent
 
-After the wizard runs, add one line to your `CLAUDE.md`, `AGENTS.md`, or `.cursorrules`:
+For Claude Code, `.claude/mcp.json` is written automatically by the wizard — eight MCP tools are immediately available in every agent session: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_pack`, `filer_review_pending`, `filer_review_apply`.
+
+For any other agent, add one line to your `CLAUDE.md`, `AGENTS.md`, or `.cursorrules`:
 
 ```markdown
 Before writing any code, read filer.md in the repo root and follow the Filer loading protocol.
 ```
-
-**For Claude Code**, `.claude/mcp.json` is written automatically by the wizard — the Filer MCP server is immediately available as tools during agent sessions with no further setup.
 
 ---
 
 ## Daily Usage
 
 ```bash
-filer pack                           # pack repo → stdout (replaces repomix/codebase-digest)
-filer pack --task "add webhook"      # smart: only relevant files + knowledge annotations
-filer pack --tokens 40000            # fit within token budget
-filer pack --remote user/repo        # pack a remote GitHub repo
-filer stats                          # coverage dashboard
-filer export > FILER_CONTEXT.md      # dump all nodes as Markdown — paste into any agent
-filer export --type security,constraint > CRITICAL_RULES.md
-filer review                         # generate review bundle + HTML UI for humans or agents
-filer verify                         # interactive y/n node verification
-filer query "your question"          # ask the knowledge layer anything
-filer show --type security           # view all security nodes
-filer update                         # re-index after manual file changes
-filer update --check-stale           # re-index + LLM staleness check on high-risk nodes
-filer learn                          # propose new nodes from PR review history
-filer scan                           # full security scan → HTML report
-filer scan --ci --fail-on high       # CI mode — exit 1 on critical/high findings
-filer agent --event commit           # run as post-push CI step
-filer agent --event scheduled --dry-run  # preview what nightly agent would do
+# Pack for AI — replaces repomix and codebase-digest
+filer pack                              # entire repo → stdout, knowledge-annotated
+filer pack --task "add webhook"         # LLM selects only relevant files
+filer pack --tokens 40000               # fit within token budget
+filer pack --remote user/repo           # pack a remote GitHub repo without cloning
+filer pack --format xml                 # repomix-compatible XML output
+
+# Knowledge layer
+filer stats                             # coverage and freshness dashboard
+filer export > FILER_CONTEXT.md         # dump all nodes as Markdown — paste into any agent
+filer export --type security,constraint > RULES.md
+filer query "how does auth work"        # LLM-synthesized answer from knowledge nodes
+filer show --type security              # view all security nodes
+
+# Review and verify
+filer review                            # HTML review UI + pending.json for agents
+filer verify                            # interactive y/n node verification
+filer update --check-stale              # LLM staleness check on high-risk nodes
+
+# Security
+filer scan                              # full scan → .filer/report.html
+filer scan --ci --fail-on high          # CI mode — exits non-zero on high/critical
+
+# Learning
+filer learn                             # propose new nodes from PR review history
+filer learn --pr 147 --auto-apply       # single PR, auto-apply high-confidence nodes
+
+# Autonomous agent
+filer agent --event commit              # post-push: re-index changed files
+filer agent --event pr_merged --pr 147  # PR merged: mine review comments
+filer agent --event ci                  # CI: security scan + fail gate
+filer agent --event scheduled           # nightly: staleness check
+filer agent --event scheduled --dry-run # preview what agent would do
 ```
 
 The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
