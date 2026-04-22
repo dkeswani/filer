@@ -84,6 +84,8 @@ filer update --check-stale           # re-index + LLM staleness check on high-ri
 filer learn                          # propose new nodes from PR review history
 filer scan                           # full security scan → HTML report
 filer scan --ci --fail-on high       # CI mode — exit 1 on critical/high findings
+filer agent --event commit           # run as post-push CI step
+filer agent --event scheduled --dry-run  # preview what nightly agent would do
 ```
 
 The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
@@ -158,6 +160,16 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 
 ---
 
+### Agent
+
+| Command | Description |
+|---------|-------------|
+| `filer agent --event <type>` | Event-driven orchestrator — maps git/CI events to the right command sequence |
+
+`filer agent` options: `--event commit\|pr_merged\|ci\|scheduled`, `--pr <number>`, `--since <ref>`, `--auto-apply`, `--dry-run`, `--fail-on <severity>`
+
+---
+
 ### Learning & Measurement
 
 | Command | Description |
@@ -178,7 +190,7 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 |---------|-------------|
 | `filer mcp` | Start the MCP server (stdio transport) for Claude Code / Cursor |
 
-The MCP server exposes seven tools: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_review_pending`, `filer_review_apply`. Claude Code loads these automatically from `.claude/mcp.json`.
+The MCP server exposes eight tools: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_pack`, `filer_review_pending`, `filer_review_apply`. Claude Code loads these automatically from `.claude/mcp.json`.
 
 ---
 
@@ -235,6 +247,30 @@ The review bundle lives at `.filer/review/pending.json`:
   ]
 }
 ```
+
+---
+
+## Replacing Repomix and Codebase Digest
+
+`filer pack` is a full drop-in replacement for both tools. Every flag you use today has an equivalent:
+
+| repomix / codebase-digest | filer pack |
+|---------------------------|------------|
+| `repomix` | `filer pack` |
+| `repomix --output out.xml --style xml` | `filer pack --output out.xml --format xml` |
+| `repomix --compress` | `filer pack --compress` |
+| `repomix --include "src/**"` | `filer pack --include "src/**"` |
+| `repomix --ignore "*.test.ts"` | `filer pack --ignore "*.test.ts"` |
+| `repomix --remote user/repo` | `filer pack --remote user/repo` |
+| `repomix --no-gitignore` | `filer pack --no-gitignore` |
+| `codebase-digest --max-tokens 40000` | `filer pack --tokens 40000` |
+| `codebase-digest --output-file ctx.md` | `filer pack --output ctx.md` |
+| *(not available)* | `filer pack --task "add payment webhook"` |
+| *(not available)* | knowledge annotations per file |
+| *(not available)* | stale node warnings in preamble |
+| *(not available)* | `filer_pack` MCP tool for agents |
+
+**Migration:** replace `repomix` or `codebase-digest` with `filer pack` in your scripts. Flags are compatible. The output gains knowledge annotations automatically if `.filer/` is initialized — use `--no-annotate` to get the same plain output as before.
 
 ---
 
