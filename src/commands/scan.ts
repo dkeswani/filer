@@ -13,6 +13,7 @@ interface ScanOptions {
   output?:    string;
   scope?:     string;
   parallel?:  string;
+  fast?:      boolean;
   open?:      boolean;
   force?:     boolean;
   ci?:        boolean;
@@ -42,10 +43,15 @@ export async function scanCommand(options: ScanOptions): Promise<void> {
   }
 
   // Run extraction
+  if (options.fast) {
+    console.log(chalk.dim('  Mode: fast (indexing model)'));
+  }
+
   const result = await runIndex({
     root,
     scope:       options.scope,
     force:       options.force,
+    fast:        options.fast,
     concurrency,
     silent:      false,
   });

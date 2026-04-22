@@ -59,6 +59,7 @@ program
   .option('--scope <path>', 'Limit to a specific directory')
   .option('--parallel <n>', 'Number of modules to process concurrently. Recommended: 3-5. Default: 1.', '1')
   .option('--no-open', 'Do not auto-open report in browser')
+  .option('--fast', 'Use indexing model (Haiku/kimi-k2.6) for all tasks — faster and cheaper')
   .option('--force', 'Re-scan already-scanned files')
   .option('--ci', 'Exit non-zero if findings meet the fail threshold (for CI pipelines)')
   .option('--fail-on <severity>', 'Severity level that triggers CI failure: critical|high|medium (default: high)', 'high')

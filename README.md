@@ -106,7 +106,7 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | `filer scan [options]` | Run a full security scan and generate an HTML report |
 | `filer layer [options]` | Build the agent knowledge layer (alias for `filer index`) |
 
-`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--open`, `--force`
+`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--open`, `--force`, `--ci`, `--fail-on <severity>`
 `filer layer` options: same as `filer index`
 
 ---
