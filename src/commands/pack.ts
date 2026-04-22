@@ -149,12 +149,18 @@ async function run(
   if (annotate !== 'none' && hasFiler) {
     const { readAllNodes } = await import('../store/mod.js');
     const allNodes = readAllNodes(root);
-    files = files.map(f => ({
-      ...f,
-      content: annotateFile(f, allNodes, annotate),
-      tokens:  estimateTokens(annotateFile(f, allNodes, annotate)),
-    }));
-    log(chalk.dim(`  Knowledge annotations added (${annotate})`));
+    if (allNodes.length === 0) {
+      log(chalk.yellow('  ⚠ .filer/ exists but has no nodes — run `filer index` to extract knowledge'));
+    } else {
+      files = files.map(f => ({
+        ...f,
+        content: annotateFile(f, allNodes, annotate),
+        tokens:  estimateTokens(annotateFile(f, allNodes, annotate)),
+      }));
+      log(chalk.dim(`  Knowledge annotations added (${annotate})`));
+    }
+  } else if (annotate !== 'none' && !hasFiler) {
+    log(chalk.yellow('  ⚠ No .filer/ found — run `filer index` to add knowledge annotations'));
   }
 
   const totalTokens = files.reduce((s, f) => s + f.tokens, 0);
