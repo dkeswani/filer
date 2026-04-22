@@ -95,7 +95,7 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 
 `filer init` options: `--provider anthropic|openai|kimi|ollama`, `--model <name>`, `--no-hook`, `--force`
 `filer index` options: `--scope <path>`, `--type <types>`, `--force`, `--dry-run`, `--cost`, `--parallel <n>`, `--fast`
-`filer update` options: `--since <git-ref>`, `--silent`
+`filer update` options: `--since <git-ref>`, `--silent`, `--check-stale`
 
 ---
 

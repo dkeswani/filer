@@ -100,6 +100,7 @@ program
   .description('Incremental update from last git commit')
   .option('--since <ref>', 'Git ref to diff from (default: HEAD~1)')
   .option('--silent', 'Suppress output (for git hook use)')
+  .option('--check-stale', 'Run LLM staleness check on high-risk nodes after update')
   .action((options) => updateCommand(options).catch(err => {
     if (!options.silent) console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);

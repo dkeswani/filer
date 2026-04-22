@@ -5,8 +5,9 @@ import { markStale, readConfig } from '../store/mod.js';
 import { getChangedFiles } from '../pipeline/scanner.js';
 
 interface UpdateOptions {
-  since?:  string;
-  silent?: boolean;
+  since?:       string;
+  silent?:      boolean;
+  checkStale?:  boolean;
 }
 
 export async function updateCommand(options: UpdateOptions): Promise<void> {
@@ -43,8 +44,8 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   // Mark existing nodes as potentially stale
   markStale(root, changed);
 
-  // Re-index only changed files
-  const result = await runUpdate(root, { silent: options.silent });
+  // Re-index only changed files, optionally running LLM staleness check
+  const result = await runUpdate(root, { silent: options.silent, checkStale: options.checkStale });
 
   if (!options.silent) {
     console.log('\n  ' + chalk.bold('Done\n'));

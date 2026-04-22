@@ -19,6 +19,7 @@ import {
 } from '../store/mod.js';
 import { LLMGateway }    from '../llm/mod.js';
 import type { AnyNode }  from '../schema/mod.js';
+import { checkStaleness } from './staleness.js';
 
 export interface IndexOptions {
   root:         string;
@@ -200,11 +201,17 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
 
 // ── Incremental update pipeline ───────────────────────────────────────────────
 
-export async function runUpdate(root: string, opts: { silent?: boolean } = {}): Promise<IndexResult> {
+export async function runUpdate(root: string, opts: { silent?: boolean; checkStale?: boolean } = {}): Promise<IndexResult> {
   const changed = getChangedFiles(root);
 
   if (changed.length === 0) {
     if (!opts.silent) console.log(chalk.dim('  No changed files since last commit.'));
+
+    // Still run staleness check even with no changed files if requested
+    if (opts.checkStale) {
+      await runStalenessCheck(root, opts.silent);
+    }
+
     return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, files_indexed: 0, estimated_usd: 0, errors: [] };
   }
 
@@ -212,7 +219,33 @@ export async function runUpdate(root: string, opts: { silent?: boolean } = {}): 
     console.log(chalk.dim(`  ${changed.length} changed file(s) — running incremental update`));
   }
 
-  return runIndex({ root, changedOnly: changed, silent: opts.silent });
+  const result = await runIndex({ root, changedOnly: changed, silent: opts.silent });
+
+  if (opts.checkStale) {
+    await runStalenessCheck(root, opts.silent);
+  }
+
+  return result;
+}
+
+async function runStalenessCheck(root: string, silent?: boolean): Promise<void> {
+  const config = readConfig(root);
+  if (!config) return;
+
+  const allNodes = readAllNodes(root);
+  const gateway  = new LLMGateway(config);
+
+  const staleResult = await checkStaleness(gateway, root, allNodes, {
+    threshold: config.stale_threshold,
+    silent,
+  });
+
+  if (!silent && staleResult.checked > 0) {
+    console.log(chalk.dim(
+      `  Staleness: checked ${staleResult.checked}, invalidated ${staleResult.invalidated}` +
+      (staleResult.cost_usd > 0 ? ` (~$${staleResult.cost_usd.toFixed(4)})` : '')
+    ));
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
