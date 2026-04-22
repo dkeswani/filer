@@ -72,6 +72,7 @@ export function detectProjectType(root: string): ProjectType {
 const PROVIDER_ENV: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai:    'OPENAI_API_KEY',
+  kimi:      'MOONSHOT_API_KEY',
   ollama:    '',
 };
 
@@ -208,11 +209,12 @@ export async function wizardCommand(): Promise<void> {
   // ── Step 2: Choose provider ────────────────────────────────────────────────
   const providerChoice = await select(
     '\n  Which LLM provider?',
-    ['Anthropic (Claude) — recommended', 'OpenAI (GPT-4o)', 'Ollama (local)'],
+    ['Anthropic (Claude) — recommended', 'OpenAI (GPT-4o)', 'Kimi (kimi-k2.6, ~80% cheaper)', 'Ollama (local)'],
     0
   );
   const provider = providerChoice.includes('Anthropic') ? 'anthropic'
     : providerChoice.includes('OpenAI') ? 'openai'
+    : providerChoice.includes('Kimi') ? 'kimi'
     : 'ollama';
 
   // ── Step 3: API key ────────────────────────────────────────────────────────
