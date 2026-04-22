@@ -20,6 +20,7 @@ import { wizardCommand }    from './commands/wizard.js';
 import { scanCommand }      from './commands/scan.js';
 import { layerCommand }     from './commands/layer.js';
 import { reviewCommand }    from './commands/review.js';
+import { exportCommand }    from './commands/export.js';
 import { filerExists }      from './store/mod.js';
 
 const program = new Command();
@@ -51,6 +52,19 @@ program
   .option('--verified', 'Show only verified nodes')
   .option('--json', 'Output raw JSON')
   .action((id, options) => showCommand(id, options));
+
+program
+  .command('export')
+  .description('Export knowledge nodes as a Markdown file — paste into any agent context window')
+  .option('--type <types>', 'Export only specific node types (comma-separated)')
+  .option('--scope <path>', 'Limit to a specific scope path')
+  .option('--verified', 'Export only verified nodes')
+  .option('--output <path>', 'Write to a file instead of stdout')
+  .option('--no-header', 'Omit the file header (for embedding in existing docs)')
+  .action((options) => exportCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
 
 program
   .command('scan')

@@ -69,6 +69,8 @@ Before writing any code, read filer.md in the repo root and follow the Filer loa
 
 ```bash
 filer stats                          # coverage dashboard
+filer export > FILER_CONTEXT.md      # dump all nodes as Markdown — paste into any agent
+filer export --type security,constraint > CRITICAL_RULES.md
 filer review                         # generate review bundle + HTML UI for humans or agents
 filer verify                         # interactive y/n node verification
 filer query "your question"          # ask the knowledge layer anything
@@ -119,11 +121,13 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | Command | Description |
 |---------|-------------|
 | `filer show [id]` | Display one or all nodes |
+| `filer export` | Export all nodes as a Markdown file — paste into any agent context window |
 | `filer query "<question>"` | Ask a natural language question — returns LLM-synthesized answer with node citations |
 | `filer verify` | Interactive y/n verification workflow |
 | `filer review [options]` | Generate a machine-readable review bundle + HTML report for human or agent review |
 
 `filer show` options: `--type <types>`, `--scope <path>`, `--verified`, `--json`
+`filer export` options: `--type <types>`, `--scope <path>`, `--verified`, `--output <path>`, `--no-header`
 `filer query` options: `--scope <path>`, `--type <types>`, `--no-llm` (skip synthesis, return matched nodes only), `--json`
 `filer verify` options: `--type <types>`, `--stale`, `--unverified-only`
 `filer review` options: `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
@@ -217,6 +221,22 @@ The review bundle lives at `.filer/review/pending.json`:
   ]
 }
 ```
+
+---
+
+## filer export
+
+`filer export` dumps all knowledge nodes as a single Markdown file. For teams not using MCP — paste it into any agent's context window, commit it alongside the code, or include it in your `AGENTS.md`.
+
+```bash
+filer export > FILER_CONTEXT.md                    # all nodes → stdout
+filer export --type security,constraint > RULES.md # critical rules only
+filer export --verified > VERIFIED.md              # only human-approved nodes
+filer export --scope src/payments/ > PAYMENTS.md   # one module
+filer export --output .filer/context.md            # write to file directly
+```
+
+The output is plain Markdown — no build step, no MCP server required. Any agent that can read a file can consume it. For Claude Code and Cursor, prefer the MCP server (`filer mcp`) which provides live, scope-filtered access instead of a static dump.
 
 ---
 
