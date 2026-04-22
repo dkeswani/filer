@@ -69,12 +69,15 @@ Before writing any code, read filer.md in the repo root and follow the Filer loa
 
 ```bash
 filer stats                          # coverage dashboard
-filer verify                         # review and approve extracted nodes
+filer review                         # generate review bundle + HTML UI for humans or agents
+filer verify                         # interactive y/n node verification
 filer query "your question"          # ask the knowledge layer anything
 filer show --type security           # view all security nodes
 filer update                         # re-index after manual file changes
+filer update --check-stale           # re-index + LLM staleness check on high-risk nodes
 filer learn                          # propose new nodes from PR review history
 filer scan                           # full security scan → HTML report
+filer scan --ci --fail-on high       # CI mode — exit 1 on critical/high findings
 ```
 
 The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
@@ -169,7 +172,10 @@ The MCP server exposes seven tools: `filer_scope`, `filer_query`, `filer_node`, 
 filer scan                          # scan entire repo, open report when done
 filer scan --scope backend/         # limit to a subdirectory
 filer scan --parallel 4             # faster — 4 modules concurrently
+filer scan --fast                   # use indexing model — cheaper, good for frequent scans
+filer scan --parallel 4 --fast      # fastest: parallel + cheaper model
 filer scan --output security.html   # custom output path
+filer scan --ci --fail-on high      # CI mode — exit 1 on critical or high findings
 ```
 
 The report groups findings by severity, links each node to its source scope, and shows verification status. Share it in PR reviews or run it in CI to track security coverage over time.
@@ -211,6 +217,19 @@ The review bundle lives at `.filer/review/pending.json`:
   ]
 }
 ```
+
+---
+
+## filer update — staleness check
+
+`filer update --check-stale` runs an LLM-powered staleness verification pass after re-indexing. For each node above the stale threshold, it pulls the git diff for that node's scope since the node was last updated, and asks the LLM whether the diff invalidates the node's claim.
+
+```bash
+filer update                   # re-index changed files (fast, no LLM staleness check)
+filer update --check-stale     # re-index + LLM staleness check on high-risk nodes
+```
+
+Nodes confirmed stale get `stale_risk = 1.0` and `verified = false`, surfacing them in `filer review`. Nodes the LLM clears get `stale_risk` lowered. The flag is opt-in to keep the git post-commit hook fast and free — use it manually or in CI.
 
 ---
 
