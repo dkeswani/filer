@@ -7,12 +7,16 @@ import { filerExists, readConfig, readAllNodes } from '../store/mod.js';
 import { runIndex }   from '../pipeline/indexer.js';
 import { generateReport } from '../report/generator.js';
 
+type FailOnSeverity = 'critical' | 'high' | 'medium';
+
 interface ScanOptions {
   output?:    string;
   scope?:     string;
   parallel?:  string;
   open?:      boolean;
   force?:     boolean;
+  ci?:        boolean;
+  failOn?:    FailOnSeverity;
 }
 
 export async function scanCommand(options: ScanOptions): Promise<void> {
@@ -98,6 +102,28 @@ export async function scanCommand(options: ScanOptions): Promise<void> {
   console.log();
   console.log(`  Share: ${chalk.dim(outputPath)}`);
   console.log(`  Next:  ${chalk.cyan('filer layer')}  (commit knowledge nodes for agents)\n`);
+
+  // CI mode: exit non-zero if findings meet or exceed the fail threshold
+  if (options.ci) {
+    const failOn: FailOnSeverity = options.failOn ?? 'high';
+    const failCount = ciFailCount(counts, failOn);
+    if (failCount > 0) {
+      console.error(chalk.red(`  CI: ${failCount} finding(s) at or above ${failOn.toUpperCase()} severity. Exiting 1.\n`));
+      process.exit(1);
+    }
+    console.log(chalk.green(`  CI: No findings at or above ${failOn.toUpperCase()} severity. ✓\n`));
+  }
+}
+
+function ciFailCount(
+  counts: { CRITICAL: number; HIGH: number; MEDIUM: number; INFO: number },
+  failOn: FailOnSeverity
+): number {
+  switch (failOn) {
+    case 'critical': return counts.CRITICAL;
+    case 'high':     return counts.CRITICAL + counts.HIGH;
+    case 'medium':   return counts.CRITICAL + counts.HIGH + counts.MEDIUM;
+  }
 }
 
 function openBrowser(filePath: string): void {
