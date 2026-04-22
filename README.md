@@ -118,10 +118,12 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | `filer show [id]` | Display one or all nodes |
 | `filer query "<question>"` | Ask a natural language question — returns LLM-synthesized answer with node citations |
 | `filer verify` | Interactive y/n verification workflow |
+| `filer review [options]` | Generate a machine-readable review bundle + HTML report for human or agent review |
 
 `filer show` options: `--type <types>`, `--scope <path>`, `--verified`, `--json`
 `filer query` options: `--scope <path>`, `--type <types>`, `--no-llm` (skip synthesis, return matched nodes only), `--json`
 `filer verify` options: `--type <types>`, `--stale`, `--unverified-only`
+`filer review` options: `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
 
 ---
 
@@ -155,7 +157,7 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 |---------|-------------|
 | `filer mcp` | Start the MCP server (stdio transport) for Claude Code / Cursor |
 
-The MCP server exposes five tools: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`. Claude Code loads these automatically from `.claude/mcp.json`.
+The MCP server exposes seven tools: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_review_pending`, `filer_review_apply`. Claude Code loads these automatically from `.claude/mcp.json`.
 
 ---
 
@@ -171,6 +173,44 @@ filer scan --output security.html   # custom output path
 ```
 
 The report groups findings by severity, links each node to its source scope, and shows verification status. Share it in PR reviews or run it in CI to track security coverage over time.
+
+---
+
+## filer review
+
+`filer review` makes node verification one command — producing a machine-readable bundle for agents and a simple HTML UI for humans.
+
+```bash
+filer review                        # generate pending.json + open HTML review UI
+filer review --unverified-only      # only nodes not yet approved
+filer review --type security        # only security nodes
+filer review --apply                # commit decisions from a reviewed pending.json
+```
+
+**For humans** — opens `.filer/review/report.html` in your browser. Click Approve / Reject / Amend per node. Batch-approve all visible items at once. Export the reviewed `pending.json`, then run `filer review --apply`.
+
+**For agents** — call `filer_review_pending` (MCP) to load the bundle, evaluate each node against the codebase, then call `filer_review_apply` with your decisions. Fully automated review loop — no human required for high-confidence nodes.
+
+The review bundle lives at `.filer/review/pending.json`:
+
+```json
+{
+  "generated_at": "...",
+  "repo": "my-repo",
+  "review_items": [
+    {
+      "id": "security:no-raw-sql",
+      "type": "security",
+      "severity": "CRITICAL",
+      "status": "pending",
+      "node": { "...full node..." },
+      "confidence": 0.94,
+      "requires_human": true,
+      "review_comment": null
+    }
+  ]
+}
+```
 
 ---
 

@@ -19,6 +19,7 @@ import { mcpCommand }       from './commands/mcp.js';
 import { wizardCommand }    from './commands/wizard.js';
 import { scanCommand }      from './commands/scan.js';
 import { layerCommand }     from './commands/layer.js';
+import { reviewCommand }    from './commands/review.js';
 import { filerExists }      from './store/mod.js';
 
 const program = new Command();
@@ -123,6 +124,20 @@ program
   .option('--stale', 'Verify only potentially stale nodes')
   .option('--unverified-only', 'Skip already verified nodes')
   .action((options) => verifyCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+program
+  .command('review')
+  .description('Generate a machine-readable review bundle (pending.json) + HTML report for human or agent review')
+  .option('--type <types>', 'Review only specific node types (comma-separated)')
+  .option('--stale', 'Include only potentially stale nodes')
+  .option('--unverified-only', 'Include only unverified nodes')
+  .option('--apply', 'Apply decisions from an already-reviewed pending.json')
+  .option('--no-open', 'Do not auto-open the HTML report in browser')
+  .option('--output <path>', 'Output path for HTML report', '.filer/review/report.html')
+  .action((options) => reviewCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);
   }));

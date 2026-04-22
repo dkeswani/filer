@@ -12,6 +12,7 @@ import {
   filerExists,
 } from '../store/mod.js';
 import { AnyNode } from '../schema/mod.js';
+import { readBundle, applyDecisions, ApplyDecision } from '../review/bundle.js';
 
 // ── Keyword relevance scoring (mirrors query command logic) ───────────────────
 
@@ -119,6 +120,33 @@ export async function startMcpServer(): Promise<void> {
           required: ['code', 'scope'],
         },
       },
+      {
+        name: 'filer_review_pending',
+        description: 'Return the current pending review bundle (pending.json). Use this to load all nodes awaiting approval, then call filer_review_apply with your decisions.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'filer_review_apply',
+        description: 'Apply review decisions to the knowledge layer. Pass an array of {id, status, review_comment} objects where status is approved|rejected|amended.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            decisions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id:             { type: 'string' },
+                  status:         { type: 'string', enum: ['approved', 'rejected', 'amended', 'pending'] },
+                  review_comment: { type: 'string' },
+                },
+                required: ['id', 'status'],
+              },
+            },
+          },
+          required: ['decisions'],
+        },
+      },
     ],
   }));
 
@@ -201,6 +229,27 @@ export async function startMcpServer(): Promise<void> {
           type: 'text',
           text: JSON.stringify({ violations, checked_nodes: nodes.length }, null, 2),
         }],
+      };
+    }
+
+    if (name === 'filer_review_pending') {
+      const bundle = readBundle(root);
+      if (!bundle) {
+        return {
+          content: [{ type: 'text', text: 'No pending review bundle found. Run: filer review' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(bundle, null, 2) }],
+      };
+    }
+
+    if (name === 'filer_review_apply') {
+      const { decisions } = args as { decisions: ApplyDecision[] };
+      const result = applyDecisions(root, decisions);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
 
