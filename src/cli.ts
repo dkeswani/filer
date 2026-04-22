@@ -22,6 +22,7 @@ import { layerCommand }     from './commands/layer.js';
 import { reviewCommand }    from './commands/review.js';
 import { exportCommand }    from './commands/export.js';
 import { packCommand }      from './commands/pack.js';
+import { agentCommand }     from './commands/agent.js';
 import { filerExists }      from './store/mod.js';
 
 const program = new Command();
@@ -237,6 +238,20 @@ program
   .option('--output <file>', 'Save full report as JSON to this path')
   .option('--dry-run', 'Show what would run without making API calls')
   .action((options) => benchmarkCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+program
+  .command('agent')
+  .description('Run the Filer agent — event-driven orchestrator for CI/CD pipelines')
+  .option('--event <type>',   'Event type: commit | pr_merged | ci | scheduled')
+  .option('--pr <number>',    'PR number (for pr_merged event)')
+  .option('--since <ref>',    'Git ref to diff from (for commit event, default: HEAD~1)')
+  .option('--auto-apply',     'Auto-apply learned nodes with confidence >= 0.85')
+  .option('--dry-run',        'Show what the agent would do without executing')
+  .option('--fail-on <severity>', 'CI failure threshold: critical|high|medium (default: high)', 'high')
+  .action((options) => agentCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);
   }));

@@ -68,6 +68,10 @@ Before writing any code, read filer.md in the repo root and follow the Filer loa
 ## Daily Usage
 
 ```bash
+filer pack                           # pack repo → stdout (replaces repomix/codebase-digest)
+filer pack --task "add webhook"      # smart: only relevant files + knowledge annotations
+filer pack --tokens 40000            # fit within token budget
+filer pack --remote user/repo        # pack a remote GitHub repo
 filer stats                          # coverage dashboard
 filer export > FILER_CONTEXT.md      # dump all nodes as Markdown — paste into any agent
 filer export --type security,constraint > CRITICAL_RULES.md
@@ -113,6 +117,16 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 
 `filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--open`, `--force`, `--ci`, `--fail-on <severity>`
 `filer layer` options: same as `filer index`
+
+---
+
+### Packing & Context
+
+| Command | Description |
+|---------|-------------|
+| `filer pack [options]` | Pack codebase into AI-ready context — replaces repomix + codebase-digest, adds knowledge annotations |
+
+`filer pack` options: `--scope <path>`, `--task <description>`, `--tokens <n>`, `--annotate summary\|full\|none`, `--compress`, `--format markdown\|xml\|json\|plain`, `--remote <url>`, `--branch <name>`, `--include <globs>`, `--ignore <globs>`, `--sort-by-changes`, `--include-git-log`, `--include-git-diff`, `--split <size>`, `--line-numbers`, `--top-files <n>`, `--stats`, `--output <file>`, `--copy`, `--no-gitignore`, `--no-instructions`
 
 ---
 
@@ -224,6 +238,51 @@ The review bundle lives at `.filer/review/pending.json`:
 
 ---
 
+## filer pack
+
+`filer pack` replaces repomix and codebase-digest — full feature parity plus four capabilities they don't have.
+
+```bash
+filer pack                                     # pack entire repo → stdout
+filer pack --output context.md                 # write to file
+filer pack --task "add payment webhook"        # smart: LLM selects relevant files only
+filer pack --tokens 40000                      # fit within token budget
+filer pack --compress                          # strip comments + empty lines (~70% smaller)
+filer pack --format xml                        # XML output (repomix compatible)
+filer pack --remote user/repo                  # pack a remote GitHub repo without cloning
+filer pack --scope src/payments/               # one module
+filer pack --annotate full                     # full knowledge annotations (default: summary)
+filer pack --no-annotate                       # pure code dump, no knowledge layer
+filer pack --stats                             # token counts per file, no output
+filer pack --sort-by-changes --top-files 10    # most-changed files first
+filer pack --include-git-log --include-git-diff  # add commit history + current diff
+```
+
+**What makes it 100x smarter than repomix:**
+
+Every file in the output gets its Filer knowledge nodes prepended inline — the agent sees constraints, dangers, and patterns attached to the code they govern, before reading a single line:
+
+```
+// ═══════════════════════════════════════════════════
+// FILER KNOWLEDGE — src/payments/webhook.ts
+// ═══════════════════════════════════════════════════
+// [FILER 🔴 SECURITY ✓] (94% conf) security:no-raw-webhook-logging
+//   Rule: Never log raw webhook payloads — contains PII
+//   If violated: PII exposure, GDPR breach
+//
+// [FILER 🟡 CONSTRAINT] (88% conf) constraint:verify-stripe-sig
+//   Rule: Always verify Stripe signature before processing
+// ═══════════════════════════════════════════════════
+
+export async function handleWebhook(req, res) { ...
+```
+
+`--task` mode uses the LLM to select only the files relevant to what you're building. `--tokens` fills the budget intelligently — security nodes first, then most-changed files. Stale knowledge nodes are flagged in the preamble so the agent knows before it starts.
+
+The `filer_pack` MCP tool exposes all of this to agents directly — no CLI required.
+
+---
+
 ## filer export
 
 `filer export` dumps all knowledge nodes as a single Markdown file. For teams not using MCP — paste it into any agent's context window, commit it alongside the code, or include it in your `AGENTS.md`.
@@ -265,6 +324,36 @@ filer index --cost          # estimate API cost before running anything
 ```
 
 `--parallel` increases throughput at the cost of higher API rate-limit exposure. `--fast` uses the cheaper indexing model for all modules instead of routing deep tasks to the more capable model — good for frequent incremental re-indexes.
+
+---
+
+## filer agent
+
+`filer agent` is a self-hostable, zero-dependency agent loop that keeps the knowledge layer up to date automatically. It responds to four event types and maps each to the right command sequence:
+
+| Event | Trigger | What it does |
+|-------|---------|--------------|
+| `commit` | post-push | `filer update` — re-index changed files |
+| `pr_merged` | PR closed | `filer learn` — mine review comments for new nodes |
+| `ci` | CI run | `filer scan --ci` — fail on high-severity findings |
+| `scheduled` | nightly | `filer update --check-stale` — LLM staleness check |
+
+```bash
+# Run manually
+filer agent --event commit
+filer agent --event pr_merged --pr 142 --auto-apply
+filer agent --event ci --fail-on high
+filer agent --event scheduled
+
+# Preview without executing
+filer agent --event scheduled --dry-run
+# → Would run: filer update --check-stale
+# → Would surface: unverified nodes in .filer/review/pending.json
+```
+
+**GitHub Actions** — copy `templates/filer.yml` from this repo to `.github/workflows/filer.yml`. It auto-selects the right event type based on `github.event_name` and commits updated `.filer/` nodes back to the branch.
+
+The agent is fully open source, ships in `@filer/cli`, and has zero dependencies beyond what Filer already uses. No external framework, no commercial service. All reasoning uses the same `LLMGateway` that powers the rest of Filer. Audit log is written to `.filer/agent-log.md`.
 
 ---
 

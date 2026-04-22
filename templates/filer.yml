@@ -1,0 +1,65 @@
+# Filer Agent — GitHub Actions workflow
+# Copy to .github/workflows/filer.yml in your repository
+#
+# Required secrets:
+#   ANTHROPIC_API_KEY  — or OPENAI_API_KEY / MOONSHOT_API_KEY depending on your provider
+#
+# Optional secrets:
+#   GITHUB_TOKEN       — auto-provided by GitHub Actions (needed for filer learn)
+
+name: Filer Agent
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: '0 2 * * *'   # nightly at 2am UTC
+
+jobs:
+  filer-agent:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for filer update
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Filer Agent
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            EVENT="commit"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            EVENT="pr_merged"
+          else
+            EVENT="scheduled"
+          fi
+
+          npx @filer/cli@latest agent \
+            --event "$EVENT" \
+            ${{ github.event_name == 'pull_request' && '--pr ${{ github.event.pull_request.number }} --auto-apply' || '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Security scan (CI)
+        if: github.event_name == 'push'
+        run: npx @filer/cli@latest agent --event ci --fail-on high
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Commit updated knowledge layer
+        if: github.event_name != 'pull_request'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: filer agent update [skip ci]'
+          file_pattern: '.filer/**'
