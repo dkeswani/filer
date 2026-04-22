@@ -21,6 +21,7 @@ import { scanCommand }      from './commands/scan.js';
 import { layerCommand }     from './commands/layer.js';
 import { reviewCommand }    from './commands/review.js';
 import { exportCommand }    from './commands/export.js';
+import { packCommand }      from './commands/pack.js';
 import { filerExists }      from './store/mod.js';
 
 const program = new Command();
@@ -62,6 +63,43 @@ program
   .option('--output <path>', 'Write to a file instead of stdout')
   .option('--no-header', 'Omit the file header (for embedding in existing docs)')
   .action((options) => exportCommand(options).catch(err => {
+    console.error(chalk.red(`\n  Error: ${err.message}\n`));
+    process.exit(1);
+  }));
+
+program
+  .command('pack')
+  .description('Pack codebase into AI-ready context — replaces repomix/codebase-digest with knowledge annotations')
+  .option('--scope <path>',              'Limit to a specific directory')
+  .option('--include <patterns>',        'Include glob patterns (comma-separated)')
+  .option('--ignore <patterns>',         'Additional ignore patterns (comma-separated)')
+  .option('--output <file>',             'Write to file (default: stdout)')
+  .option('--format <fmt>',              'Output format: markdown|xml|json|plain (default: markdown)')
+  .option('--task <description>',        'Select only files relevant to this task (LLM-powered)')
+  .option('--tokens <n>',                'Token budget — fit output within N tokens')
+  .option('--annotate <depth>',          'Annotation depth: summary|full (default: summary)')
+  .option('--no-annotate',               'Skip knowledge annotations (pure code dump)')
+  .option('--compress',                  'Remove comments and empty lines')
+  .option('--remove-comments',           'Strip comments only')
+  .option('--remove-empty-lines',        'Strip empty lines only')
+  .option('--line-numbers',              'Prefix each line with its line number')
+  .option('--sort-by-changes',           'Sort files by git change frequency (most changed first)')
+  .option('--include-git-log',           'Append recent git commit log')
+  .option('--include-git-log-count <n>', 'Number of commits to include (default: 20)')
+  .option('--include-git-diff',          'Append current working diff')
+  .option('--remote <url>',              'Clone and pack a remote GitHub repo (e.g. user/repo)')
+  .option('--branch <name>',             'Branch/tag/commit to use with --remote')
+  .option('--split <size>',              'Split output into parts (e.g. 500kb, 2mb)')
+  .option('--top-files <n>',             'Show N largest files in summary (default: 5)')
+  .option('--max-file-size <kb>',        'Skip files above this size in KB (default: 500)')
+  .option('--no-gitignore',              'Do not respect .gitignore')
+  .option('--no-instructions',           'Skip prepending filer.md instructions')
+  .option('--instructions <path>',       'Custom instruction file to prepend')
+  .option('--header-text <text>',        'Custom header text')
+  .option('--stats',                     'Show token counts per file without generating output')
+  .option('--copy',                      'Copy output to clipboard')
+  .option('--quiet',                     'Suppress progress output')
+  .action((options) => packCommand(options).catch(err => {
     console.error(chalk.red(`\n  Error: ${err.message}\n`));
     process.exit(1);
   }));

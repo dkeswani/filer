@@ -8,11 +8,21 @@ import {
   readIndex,
   readAllNodes,
   readNode,
+  readConfig,
   loadNodesForScope,
   filerExists,
 } from '../store/mod.js';
+import { LLMGateway } from '../llm/mod.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import { AnyNode } from '../schema/mod.js';
 import { readBundle, applyDecisions, ApplyDecision } from '../review/bundle.js';
+import { scanFiles, estimateTokens } from '../pack/scanner.js';
+import { annotateFile, buildKnowledgePreamble } from '../pack/annotator.js';
+import { formatOutput } from '../pack/formatter.js';
+import { selectRelevantFiles, applyTokenBudget } from '../pack/selector.js';
+import { compress } from '../pack/compressor.js';
+import { buildTree, renderTree } from '../pack/tree.js';
 
 // ── Keyword relevance scoring (mirrors query command logic) ───────────────────
 
@@ -118,6 +128,23 @@ export async function startMcpServer(): Promise<void> {
             scope: { type: 'string', description: 'File path or directory scope to load rules from' },
           },
           required: ['code', 'scope'],
+        },
+      },
+      {
+        name: 'filer_pack',
+        description: 'Pack codebase files into AI-ready context with Filer knowledge annotations. Replaces repomix. Use task param for smart file selection.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            scope:      { type: 'string',  description: 'Limit to a subdirectory' },
+            task:       { type: 'string',  description: 'Select only files relevant to this task description' },
+            tokens:     { type: 'number',  description: 'Token budget — return at most this many tokens' },
+            annotate:   { type: 'string',  description: 'Annotation depth: summary|full|none (default: summary)' },
+            compress:   { type: 'boolean', description: 'Strip comments and empty lines' },
+            format:     { type: 'string',  description: 'Output format: markdown|xml|json|plain (default: markdown)' },
+            include:    { type: 'string',  description: 'Comma-separated glob include patterns' },
+            ignore:     { type: 'string',  description: 'Comma-separated glob ignore patterns' },
+          },
         },
       },
       {
@@ -230,6 +257,61 @@ export async function startMcpServer(): Promise<void> {
           text: JSON.stringify({ violations, checked_nodes: nodes.length }, null, 2),
         }],
       };
+    }
+
+    if (name === 'filer_pack') {
+      const {
+        scope, task, tokens, annotate = 'summary', compress: doCompress = false,
+        format = 'markdown', include, ignore,
+      } = args as {
+        scope?: string; task?: string; tokens?: number; annotate?: string;
+        compress?: boolean; format?: string; include?: string; ignore?: string;
+      };
+
+      const includePatterns = include ? include.split(',').map(s => s.trim())
+        : scope ? [`${scope}/**`] : ['**/*'];
+      const ignorePatterns  = ignore ? ignore.split(',').map(s => s.trim()) : [];
+
+      let files = await scanFiles({
+        root, include: includePatterns, ignore: ignorePatterns,
+        useGitignore: true, maxFileSizeKb: 500,
+      });
+
+      const config = readConfig(root);
+
+      if (task && config) {
+        const gw = new LLMGateway(config);
+        files = await selectRelevantFiles(gw, files, task, tokens ?? 0);
+      } else if (tokens) {
+        files = applyTokenBudget(files, tokens);
+      }
+
+      if (doCompress) {
+        files = files.map(f => ({
+          ...f,
+          content: compress(f.content, f.path, { removeComments: true, removeEmptyLines: true }),
+          tokens: estimateTokens(f.content),
+        }));
+      }
+
+      const allNodes  = readAllNodes(root);
+      const annotated = annotate !== 'none'
+        ? files.map(f => ({ ...f, content: annotateFile(f, allNodes, annotate as any) }))
+        : files;
+
+      const preamble  = annotate !== 'none' ? buildKnowledgePreamble(root, files) : undefined;
+      const treeNode  = buildTree(root, root, { maxDepth: 3 });
+      const tree      = renderTree(treeNode);
+      const totalTokens = annotated.reduce((s, f) => s + estimateTokens(f.content), 0);
+
+      const output = formatOutput({
+        format: format as any, files: annotated, tree, preamble,
+        repoName: require('path').basename(root),
+        generatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        totalTokens, totalFiles: annotated.length, topFilesLen: 0,
+      });
+
+      return { content: [{ type: 'text', text: output }] };
     }
 
     if (name === 'filer_review_pending') {
