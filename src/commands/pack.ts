@@ -22,7 +22,7 @@ export interface PackOptions {
   format?:            string;
   task?:              string;
   tokens?:            string;
-  annotate?:          string;
+  annotate?:          string | boolean;
   noAnnotate?:        boolean;
   compress?:          boolean;
   removeComments?:    boolean;
@@ -39,7 +39,7 @@ export interface PackOptions {
   maxFileSize?:       string;
   noGitignore?:       boolean;
   noInstructions?:    boolean;
-  instructions?:      string;
+  instructions?:      string | boolean;
   headerText?:        string;
   stats?:             boolean;
   copy?:              boolean;
@@ -87,8 +87,8 @@ async function run(
 ): Promise<void> {
 
   const format      = (options.format ?? 'markdown') as OutputFormat;
-  const annotate    = options.noAnnotate ? 'none'
-    : (options.annotate ?? 'summary') as AnnotationDepth;
+  const annotate    = (options.annotate === false || options.noAnnotate) ? 'none'
+    : (typeof options.annotate === 'string' ? options.annotate : 'summary') as AnnotationDepth;
   const tokenBudget = options.tokens ? parseInt(options.tokens, 10) : 0;
   const topFiles    = options.topFiles ? parseInt(options.topFiles, 10) : 5;
   const maxFileSize = options.maxFileSize ? parseInt(options.maxFileSize, 10) : 500;
@@ -176,8 +176,8 @@ async function run(
 
   // ── Instructions ─────────────────────────────────────────────────────────
   let instructions: string | undefined;
-  if (!options.noInstructions) {
-    const instrPath = options.instructions
+  if (options.instructions !== false) {
+    const instrPath = typeof options.instructions === 'string'
       ? path.resolve(root, options.instructions)
       : path.join(root, 'filer.md');
     if (fs.existsSync(instrPath)) {
