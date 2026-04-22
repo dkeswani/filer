@@ -20,7 +20,7 @@ npx @filer/cli@latest
 No install required. The interactive wizard guides you through everything in one session:
 
 1. **Detects your project type** — Next.js, Python/FastAPI, Express, Go, Rust, TypeScript, JavaScript
-2. **Asks which LLM provider** — Anthropic (default), OpenAI, or local Ollama
+2. **Asks which LLM provider** — Anthropic (default), OpenAI, Kimi, or local Ollama
 3. **Handles your API key** — reads from environment, or prompts and saves it securely to `.env`
 4. **Shows a cost estimate** with a 5-second countdown before any API calls (Ctrl+C to cancel)
 5. **Builds the knowledge layer** — scans your code, extracts nodes, shows live progress
@@ -74,6 +74,7 @@ filer query "your question"          # ask the knowledge layer anything
 filer show --type security           # view all security nodes
 filer update                         # re-index after manual file changes
 filer learn                          # propose new nodes from PR review history
+filer scan                           # full security scan → HTML report
 ```
 
 The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
@@ -92,9 +93,21 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | `filer update [options]` | Incremental re-index from last git commit |
 | `filer stats` | Coverage and freshness dashboard |
 
-`filer init` options: `--provider anthropic|openai|ollama`, `--model <name>`, `--no-hook`, `--force`
-`filer index` options: `--scope <path>`, `--type <types>`, `--force`, `--dry-run`, `--cost`
+`filer init` options: `--provider anthropic|openai|kimi|ollama`, `--model <name>`, `--no-hook`, `--force`
+`filer index` options: `--scope <path>`, `--type <types>`, `--force`, `--dry-run`, `--cost`, `--parallel <n>`, `--fast`
 `filer update` options: `--since <git-ref>`, `--silent`
+
+---
+
+### Scanning & Reporting
+
+| Command | Description |
+|---------|-------------|
+| `filer scan [options]` | Run a full security scan and generate an HTML report |
+| `filer layer [options]` | Build the agent knowledge layer (alias for `filer index`) |
+
+`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--open`, `--force`
+`filer layer` options: same as `filer index`
 
 ---
 
@@ -146,6 +159,36 @@ The MCP server exposes five tools: `filer_scope`, `filer_query`, `filer_node`, `
 
 ---
 
+## filer scan
+
+`filer scan` runs a full security-focused extraction pass and writes a self-contained HTML report to `.filer/report.html`.
+
+```bash
+filer scan                          # scan entire repo, open report when done
+filer scan --scope backend/         # limit to a subdirectory
+filer scan --parallel 4             # faster — 4 modules concurrently
+filer scan --output security.html   # custom output path
+```
+
+The report groups findings by severity, links each node to its source scope, and shows verification status. Share it in PR reviews or run it in CI to track security coverage over time.
+
+---
+
+## filer index — speed flags
+
+Two flags make indexing faster for large repos:
+
+```bash
+filer index --parallel 4    # process 4 modules concurrently (recommended: 3–5)
+filer index --fast          # use indexing model (Haiku/kimi-k2.6) for all tasks
+filer index --parallel 4 --fast   # fastest: parallel + cheaper model
+filer index --cost          # estimate API cost before running anything
+```
+
+`--parallel` increases throughput at the cost of higher API rate-limit exposure. `--fast` uses the cheaper indexing model for all modules instead of routing deep tasks to the more capable model — good for frequent incremental re-indexes.
+
+---
+
 ## filer learn
 
 `filer learn` closes the feedback loop between code review and the knowledge layer.
@@ -160,7 +203,7 @@ filer learn --auto-apply           # apply nodes with confidence >= 0.85 without
 filer learn --dry-run              # preview proposals without writing
 ```
 
-Requires `GITHUB_TOKEN` in your environment.
+No `GITHUB_TOKEN` setup required. Filer resolves credentials automatically: env var → `.env` file → `gh` CLI → GitHub OAuth Device Flow. The first time you run `filer learn` without a token, Filer opens your browser and walks you through authorization. The token is saved to `.env`.
 
 If an agent has to be told the same thing twice in code review, `filer learn` closes that gap.
 
@@ -201,9 +244,12 @@ Reports avg score, token count, and latency for each variant, plus a delta score
 |----------|-------------|---------|
 | Anthropic *(default)* | Sonnet 4.6 (deep), Haiku 4.5 (indexing) | `ANTHROPIC_API_KEY` |
 | OpenAI | GPT-4o (deep), GPT-4o-mini (indexing) | `OPENAI_API_KEY` |
+| Kimi | kimi-k2.6 (256K context, ~80% cheaper than Sonnet) | `MOONSHOT_API_KEY` |
 | Ollama | llama3.3 or any local model | *(none)* |
 
-Switch provider: `filer init --provider openai --force`
+Switch provider: `filer init --provider kimi --force`
+
+Sign up for Kimi at [platform.moonshot.ai](https://platform.moonshot.ai).
 
 ---
 
@@ -229,7 +275,7 @@ Filer is MIT licensed. The highest-value contributions are:
 git clone https://github.com/dkeswani/filer.git
 cd filer
 npm install
-npm test          # 146 tests — all must pass before and after your change
+npm test          # 168 tests — all must pass before and after your change
 npx tsc --noEmit  # TypeScript must be clean
 ```
 
