@@ -110,6 +110,17 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
 
   const existingNodes = readAllNodes(root);
 
+  // Build a lookup: module path prefix → newest node updated_at (ms)
+  // Used to skip modules where no file has changed since last index run
+  const moduleIndexedAt = new Map<string, number>();
+  for (const node of existingNodes) {
+    const t = new Date(node.updated_at).getTime();
+    for (const s of node.scope) {
+      const prev = moduleIndexedAt.get(s) ?? 0;
+      if (t > prev) moduleIndexedAt.set(s, t);
+    }
+  }
+
   // If --fast, patch gateway to route all tasks through indexing_model
   if (opts.fast) {
     const orig = (gateway as any).modelForTask.bind(gateway);
@@ -135,6 +146,18 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
       const existingIds = existingNodes
         .filter(n => n.scope.some(s => mod.path.startsWith(s) || s.startsWith(mod.path)))
         .map(n => n.id);
+
+      // Skip module if already indexed and no file has been modified since
+      if (!opts.force && existingIds.length > 0) {
+        const indexedAt = moduleIndexedAt.get(mod.path) ?? 0;
+        const newestFile = Math.max(...mod.files.map(f => f.mtimeMs));
+        if (newestFile <= indexedAt) {
+          completed++;
+          if (isParallel) sharedSpinner!.text = `  Indexing modules... (${completed}/${modules.length})`;
+          else spinner?.succeed(`  [${i + 1}/${modules.length}] ${mod.name} — skipped (up to date)`);
+          return;
+        }
+      }
 
       const extraction = await extractNodes(gateway, {
         modulePath:  mod.path,

@@ -8,6 +8,7 @@ export interface SourceFile {
   absolutePath: string;
   content:      string;
   sizeBytes:    number;
+  mtimeMs:      number;   // file last-modified timestamp (ms since epoch)
 }
 
 export interface Module {
@@ -64,6 +65,7 @@ export async function scanFiles(
         absolutePath: abs,
         content,
         sizeBytes:    stat.size,
+        mtimeMs:      stat.mtimeMs,
       });
     }
   }
