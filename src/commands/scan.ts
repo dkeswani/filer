@@ -3,7 +3,8 @@ import fs   from 'fs';
 import { exec } from 'child_process';
 import chalk from 'chalk';
 import ora   from 'ora';
-import { filerExists, readConfig, readAllNodes } from '../store/mod.js';
+import { readAllNodes } from '../store/mod.js';
+import { ensureConfig } from './utils.js';
 import { runIndex }   from '../pipeline/indexer.js';
 import { generateReport } from '../report/generator.js';
 
@@ -22,17 +23,7 @@ interface ScanOptions {
 
 export async function scanCommand(options: ScanOptions): Promise<void> {
   const root = process.cwd();
-
-  if (!filerExists(root)) {
-    console.error(chalk.red('\n  No .filer/ directory found. Run: filer init\n'));
-    process.exit(1);
-  }
-
-  const config = readConfig(root);
-  if (!config) {
-    console.error(chalk.red('\n  No .filer-config.json found. Run: filer init\n'));
-    process.exit(1);
-  }
+  const config = ensureConfig(root);
 
   const outputPath = options.output ?? path.join('.filer', 'report.html');
   const concurrency = options.parallel ? parseInt(options.parallel, 10) : 1;

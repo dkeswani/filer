@@ -36,7 +36,7 @@ describe('hookCommand — install', () => {
   it('hook file contains filer update command', async () => {
     await hookCommand('install');
     const content = fs.readFileSync(hookPath, 'utf-8');
-    expect(content).toContain('filer update --silent');
+    expect(content).toContain('filer layer --update --silent');
   });
 
   it('hook file exists with correct shebang', async () => {
@@ -52,14 +52,14 @@ describe('hookCommand — install', () => {
     await hookCommand('install');
     const content = fs.readFileSync(hookPath, 'utf-8');
     expect(content).toContain('existing hook');
-    expect(content).toContain('filer update --silent');
+    expect(content).toContain('filer layer --update --silent');
   });
 
   it('does not duplicate if already installed', async () => {
     await hookCommand('install');
     await hookCommand('install');
     const content = fs.readFileSync(hookPath, 'utf-8');
-    const count = (content.match(/filer update --silent/g) ?? []).length;
+    const count = (content.match(/filer layer --update --silent/g) ?? []).length;
     expect(count).toBe(1);
   });
 });
@@ -82,7 +82,7 @@ describe('hookCommand — uninstall', () => {
     expect(fs.existsSync(hookPath)).toBe(true);
     const content = fs.readFileSync(hookPath, 'utf-8');
     expect(content).toContain('other hook');
-    expect(content).not.toContain('filer update --silent');
+    expect(content).not.toContain('filer layer --update --silent');
   });
 
   it('no-ops when hook is not installed', async () => {

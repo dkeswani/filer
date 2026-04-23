@@ -1,11 +1,8 @@
 import chalk from 'chalk';
 import * as readline from 'readline';
-import {
-  readAllNodes,
-  writeNode,
-  filerExists,
-} from '../store/mod.js';
-import { AnyNode, NodeType, NODE_PRIORITY } from '../schema/mod.js';
+import { writeNode } from '../store/mod.js';
+import { AnyNode, NodeType } from '../schema/mod.js';
+import { ensureFilerExists, loadNodes } from './utils.js';
 
 interface VerifyOptions {
   type?:           string;
@@ -15,33 +12,18 @@ interface VerifyOptions {
 
 export async function verifyCommand(options: VerifyOptions): Promise<void> {
   const root = process.cwd();
+  ensureFilerExists(root);
 
-  if (!filerExists(root)) {
-    console.error(chalk.red('\n  No .filer/ directory found. Run: filer init\n'));
-    process.exit(1);
-  }
-
-  let nodes = readAllNodes(root);
-
-  if (options.type) {
-    const types = options.type.split(',').map(t => t.trim()) as NodeType[];
-    nodes = nodes.filter(n => types.includes(n.type));
-  }
-
-  if (options.stale) {
-    nodes = nodes.filter(n => n.stale_risk >= 0.5);
-  }
-
-  if (options.unverifiedOnly) {
-    nodes = nodes.filter(n => !n.verified);
-  }
+  const nodes = loadNodes(root, {
+    type:           options.type,
+    stale:          options.stale,
+    unverifiedOnly: options.unverifiedOnly,
+  });
 
   if (nodes.length === 0) {
     console.log(chalk.green('\n  No nodes to verify with the given filters.\n'));
     return;
   }
-
-  nodes.sort((a, b) => (NODE_PRIORITY[a.type] ?? 9) - (NODE_PRIORITY[b.type] ?? 9));
 
   console.log(chalk.bold(`\n  Filer Verify — ${nodes.length} node(s) to review\n`));
   console.log(chalk.dim('  Keys: [y] verify  [n] reject  [e] edit  [s] skip  [q] quit\n'));

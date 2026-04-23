@@ -1,11 +1,7 @@
 import chalk from 'chalk';
-import {
-  readNode,
-  readAllNodes,
-  readIndex,
-  filerExists,
-} from '../store/mod.js';
-import { AnyNode, NodeType, NODE_PRIORITY } from '../schema/mod.js';
+import { readNode } from '../store/mod.js';
+import { AnyNode, NodeType } from '../schema/mod.js';
+import { ensureFilerExists, loadNodes } from './utils.js';
 
 interface ShowOptions {
   type?: string;
@@ -16,11 +12,7 @@ interface ShowOptions {
 
 export async function showCommand(id: string | undefined, options: ShowOptions): Promise<void> {
   const root = process.cwd();
-
-  if (!filerExists(root)) {
-    console.error(chalk.red('\n  No .filer/ directory found. Run: filer init\n'));
-    process.exit(1);
-  }
+  ensureFilerExists(root);
 
   // Show single node by ID
   if (id) {
@@ -38,29 +30,12 @@ export async function showCommand(id: string | undefined, options: ShowOptions):
   }
 
   // Show multiple nodes with filters
-  let nodes = readAllNodes(root);
-
-  if (options.type) {
-    const types = options.type.split(',').map(t => t.trim()) as NodeType[];
-    nodes = nodes.filter(n => types.includes(n.type));
-  }
-
-  if (options.scope) {
-    const scope = options.scope;
-    nodes = nodes.filter(n => n.scope.some(s => s.includes(scope) || scope.includes(s.replace('/**', '').replace('/*', ''))));
-  }
-
-  if (options.verified !== undefined) {
-    nodes = nodes.filter(n => n.verified === options.verified);
-  }
+  const nodes = loadNodes(root, { type: options.type, scope: options.scope, verified: options.verified });
 
   if (nodes.length === 0) {
     console.log(chalk.yellow('\n  No nodes match the given filters.\n'));
     return;
   }
-
-  // Sort by priority
-  nodes.sort((a, b) => (NODE_PRIORITY[a.type] ?? 9) - (NODE_PRIORITY[b.type] ?? 9));
 
   if (options.json) {
     console.log(JSON.stringify(nodes, null, 2));

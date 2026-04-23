@@ -1,8 +1,9 @@
 import fs   from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { readAllNodes, readIndex, filerExists } from '../store/mod.js';
-import { AnyNode, NodeType, NODE_PRIORITY } from '../schema/mod.js';
+import { readIndex } from '../store/mod.js';
+import { AnyNode, NodeType } from '../schema/mod.js';
+import { ensureFilerExists, loadNodes } from './utils.js';
 
 interface ExportOptions {
   type?:       string;
@@ -14,36 +15,14 @@ interface ExportOptions {
 
 export async function exportCommand(options: ExportOptions): Promise<void> {
   const root = process.cwd();
+  ensureFilerExists(root);
 
-  if (!filerExists(root)) {
-    console.error(chalk.red('\n  No .filer/ directory found. Run: filer init\n'));
-    process.exit(1);
-  }
-
-  let nodes = readAllNodes(root);
-
-  if (options.type) {
-    const types = options.type.split(',').map(t => t.trim()) as NodeType[];
-    nodes = nodes.filter(n => types.includes(n.type));
-  }
-
-  if (options.scope) {
-    const scope = options.scope;
-    nodes = nodes.filter(n =>
-      n.scope.some(s => s.includes(scope) || scope.includes(s.replace('/**', '').replace('/*', '')))
-    );
-  }
-
-  if (options.verified !== undefined) {
-    nodes = nodes.filter(n => n.verified === options.verified);
-  }
+  const nodes = loadNodes(root, { type: options.type, scope: options.scope, verified: options.verified });
 
   if (nodes.length === 0) {
     process.stderr.write(chalk.yellow('  No nodes match the given filters.\n'));
     return;
   }
-
-  nodes.sort((a, b) => (NODE_PRIORITY[a.type] ?? 9) - (NODE_PRIORITY[b.type] ?? 9));
 
   const index  = readIndex(root);
   const repo   = index?.repo ?? path.basename(root);

@@ -1,13 +1,8 @@
 import chalk from 'chalk';
-import {
-  filerExists,
-  readIndex,
-  readConfig,
-  loadNodesForScope,
-  readAllNodes,
-} from '../store/mod.js';
+import { readIndex, readConfig, loadNodesForScope, readAllNodes } from '../store/mod.js';
 import { LLMGateway } from '../llm/mod.js';
 import { AnyNode, NodeType, NODE_PRIORITY } from '../schema/mod.js';
+import { ensureFilerExists, filterNodes } from './utils.js';
 
 interface QueryOptions {
   scope?:  string;
@@ -30,11 +25,7 @@ Format: plain text, no markdown headers. 2-4 paragraphs maximum.`;
 
 export async function queryCommand(question: string, options: QueryOptions): Promise<void> {
   const root = process.cwd();
-
-  if (!filerExists(root)) {
-    console.error(chalk.red('\n  No .filer/ directory found. Run: filer init\n'));
-    process.exit(1);
-  }
+  ensureFilerExists(root);
 
   const index = readIndex(root);
   if (!index || index.stats.nodes_total === 0) {
@@ -55,10 +46,7 @@ export async function queryCommand(question: string, options: QueryOptions): Pro
   }
 
   // Filter by type if specified
-  if (options.type) {
-    const types = options.type.split(',').map(t => t.trim()) as NodeType[];
-    nodes = nodes.filter(n => types.includes(n.type));
-  }
+  if (options.type) nodes = filterNodes(nodes, { type: options.type });
 
   if (nodes.length === 0) {
     console.log(chalk.yellow('\n  No relevant nodes found for this query.'));

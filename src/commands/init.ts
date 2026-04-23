@@ -158,20 +158,20 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   // Print next steps
   console.log('\n  ' + chalk.bold('Ready. Next step:'));
-  console.log('\n  ' + chalk.cyan(`filer index`) + chalk.dim('  — build the knowledge layer from your codebase'));
+  console.log('\n  ' + chalk.cyan(`filer layer`) + chalk.dim('  — build the knowledge layer from your codebase'));
   console.log('  ' + chalk.dim(`This will analyze your code and extract constraints, patterns,`));
   console.log('  ' + chalk.dim(`dangers, security rules, and more into .filer/\n`));
 
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) {
       console.log('  ' + chalk.yellow('⚠  ANTHROPIC_API_KEY not set.'));
-      console.log('  ' + chalk.dim('   Export it before running filer index:\n'));
+      console.log('  ' + chalk.dim('   Export it before running filer layer:\n'));
       console.log('  ' + chalk.cyan('   export ANTHROPIC_API_KEY=sk-ant-...\n'));
     }
   } else if (provider === 'openai') {
     if (!process.env.OPENAI_API_KEY) {
       console.log('  ' + chalk.yellow('⚠  OPENAI_API_KEY not set.'));
-      console.log('  ' + chalk.dim('   Export it before running filer index.\n'));
+      console.log('  ' + chalk.dim('   Export it before running filer layer.\n'));
     }
   } else if (provider === 'ollama') {
     console.log('  ' + chalk.dim('   Using Ollama at http://localhost:11434'));
@@ -203,7 +203,7 @@ function installGitHook(root: string): boolean {
   const hookContent = `#!/bin/sh
 # Filer: update knowledge nodes after each commit
 if command -v filer >/dev/null 2>&1; then
-  filer update --silent
+  filer layer --update --silent
 fi
 `;
   fs.writeFileSync(hookPath, hookContent, { mode: 0o755 });
@@ -268,8 +268,8 @@ Before writing any code in this repository:
 ## Updating Filer
 
 \`\`\`bash
-filer update    # incremental update from last commit
-filer verify    # human verification workflow
+filer layer --update    # incremental update from last commit
+filer review --tty    # human verification workflow
 filer stats     # coverage and freshness report
 \`\`\`
 `;

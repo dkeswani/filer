@@ -6,7 +6,7 @@ const HOOK_MARKER = '# Filer: update knowledge nodes after each commit';
 const HOOK_CONTENT = `#!/bin/sh
 ${HOOK_MARKER}
 if command -v filer >/dev/null 2>&1; then
-  filer update --silent
+  filer layer --update --silent
 fi
 `;
 
@@ -49,7 +49,7 @@ function install(hooksDir: string, hookPath: string): void {
 
   fs.writeFileSync(hookPath, HOOK_CONTENT, { mode: 0o755 });
   console.log(chalk.green('\n  ✓ Installed git post-commit hook.\n'));
-  console.log(chalk.dim('  filer update --silent will run after each commit.\n'));
+  console.log(chalk.dim('  filer layer --update --silent will run after each commit.\n'));
 }
 
 function uninstall(hookPath: string): void {

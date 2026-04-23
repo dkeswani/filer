@@ -136,6 +136,11 @@ filer pack --remote user/repo           # pack a remote GitHub repo without clon
 filer pack --format xml                 # repomix-compatible XML output
 
 # Knowledge layer
+filer layer                             # full build or rebuild
+filer layer --update                    # incremental re-index from last commit
+filer layer --update --check-stale      # + LLM staleness check on high-risk nodes
+filer layer --parallel 4 --fast         # fastest: parallel + cheaper model
+filer layer --cost                      # estimate API cost before running
 filer stats                             # coverage and freshness dashboard
 filer export > FILER_CONTEXT.md         # dump all nodes as Markdown — paste into any agent
 filer export --type security,constraint > RULES.md
@@ -144,8 +149,8 @@ filer show --type security              # view all security nodes
 
 # Review and verify
 filer review                            # HTML review UI + pending.json for agents
-filer verify                            # interactive y/n node verification
-filer update --check-stale              # LLM staleness check on high-risk nodes
+filer review --tty                      # interactive y/n node verification
+filer review --apply                    # commit decisions from a reviewed pending.json
 
 # Security
 filer scan                              # full scan → .filer/report.html
@@ -156,6 +161,7 @@ filer learn                             # propose new nodes from PR review histo
 filer learn --pr 147 --auto-apply       # single PR, auto-apply high-confidence nodes
 
 # Autonomous agent
+filer agent                             # ReAct loop — LLM decides what to do
 filer agent --event commit              # post-push: re-index changed files
 filer agent --event pr_merged --pr 147  # PR merged: mine review comments
 filer agent --event ci                  # CI: security scan + fail gate
@@ -163,7 +169,7 @@ filer agent --event scheduled           # nightly: staleness check
 filer agent --event scheduled --dry-run # preview what agent would do
 ```
 
-The git post-commit hook installed by `filer init` runs `filer update` automatically after every commit. The knowledge layer stays current without manual work.
+The git post-commit hook installed by `filer init` runs `filer layer --update --silent` automatically after every commit. The knowledge layer stays current without manual work.
 
 ---
 
@@ -175,13 +181,14 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 |---------|-------------|
 | `filer` | Run the setup wizard (first time) or show stats dashboard (already initialized) |
 | `filer init [options]` | Initialize without the wizard |
-| `filer index [options]` | Build or rebuild the full knowledge layer |
-| `filer update [options]` | Incremental re-index from last git commit |
+| `filer layer [options]` | Build, rebuild, or incrementally update the knowledge layer |
 | `filer stats` | Coverage and freshness dashboard |
 
 `filer init` options: `--provider anthropic|openai|kimi|ollama`, `--model <name>`, `--no-hook`, `--force`
-`filer index` options: `--scope <path>`, `--type <types>`, `--force`, `--dry-run`, `--cost`, `--parallel <n>`, `--fast`
-`filer update` options: `--since <git-ref>`, `--silent`, `--check-stale`
+
+`filer layer` options:
+- Build mode (default): `--scope <path>`, `--force`, `--dry-run`, `--cost`, `--parallel <n>`, `--fast`
+- Update mode (`--update`): `--since <git-ref>`, `--silent`, `--check-stale`
 
 ---
 
@@ -190,10 +197,8 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | Command | Description |
 |---------|-------------|
 | `filer scan [options]` | Run a full security scan and generate an HTML report |
-| `filer layer [options]` | Build the agent knowledge layer (alias for `filer index`) |
 
-`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--open`, `--force`, `--ci`, `--fail-on <severity>`
-`filer layer` options: same as `filer index`
+`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--no-open`, `--force`, `--ci`, `--fail-on critical|high|medium`
 
 ---
 
@@ -203,7 +208,7 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 |---------|-------------|
 | `filer pack [options]` | Pack codebase into AI-ready context — replaces repomix + codebase-digest, adds knowledge annotations |
 
-`filer pack` options: `--scope <path>`, `--task <description>`, `--tokens <n>`, `--annotate summary\|full\|none`, `--compress`, `--format markdown\|xml\|json\|plain`, `--remote <url>`, `--branch <name>`, `--include <globs>`, `--ignore <globs>`, `--sort-by-changes`, `--include-git-log`, `--include-git-diff`, `--split <size>`, `--line-numbers`, `--top-files <n>`, `--stats`, `--output <file>`, `--copy`, `--no-gitignore`, `--no-instructions`
+`filer pack` options: `--scope <path>`, `--task <description>`, `--tokens <n>`, `--annotate summary\|full`, `--no-annotate`, `--compress`, `--format markdown\|xml\|json\|plain`, `--remote <url>`, `--branch <name>`, `--include <globs>`, `--ignore <globs>`, `--sort-by-changes`, `--include-git-log`, `--include-git-diff`, `--split <size>`, `--line-numbers`, `--top-files <n>`, `--stats`, `--output <file>`, `--copy`, `--no-gitignore`, `--no-instructions`
 
 ---
 
@@ -214,14 +219,12 @@ The git post-commit hook installed by `filer init` runs `filer update` automatic
 | `filer show [id]` | Display one or all nodes |
 | `filer export` | Export all nodes as a Markdown file — paste into any agent context window |
 | `filer query "<question>"` | Ask a natural language question — returns LLM-synthesized answer with node citations |
-| `filer verify` | Interactive y/n verification workflow |
-| `filer review [options]` | Generate a machine-readable review bundle + HTML report for human or agent review |
+| `filer review [options]` | HTML review UI + machine-readable bundle; `--tty` for interactive CLI; `--apply` to commit decisions |
 
 `filer show` options: `--type <types>`, `--scope <path>`, `--verified`, `--json`
 `filer export` options: `--type <types>`, `--scope <path>`, `--verified`, `--output <path>`, `--no-header`
 `filer query` options: `--scope <path>`, `--type <types>`, `--no-llm` (skip synthesis, return matched nodes only), `--json`
-`filer verify` options: `--type <types>`, `--stale`, `--unverified-only`
-`filer review` options: `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
+`filer review` options: `--tty`, `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
 
 ---
 
@@ -293,6 +296,7 @@ The report groups findings by severity, links each node to its source scope, and
 
 ```bash
 filer review                        # generate pending.json + open HTML review UI
+filer review --tty                  # interactive y/n verification in the terminal
 filer review --unverified-only      # only nodes not yet approved
 filer review --type security        # only security nodes
 filer review --apply                # commit decisions from a reviewed pending.json
@@ -410,31 +414,29 @@ The output is plain Markdown — no build step, no MCP server required. Any agen
 
 ---
 
-## filer update — staleness check
+## filer layer — staleness check and speed flags
 
-`filer update --check-stale` runs an LLM-powered staleness verification pass after re-indexing. For each node above the stale threshold, it pulls the git diff for that node's scope since the node was last updated, and asks the LLM whether the diff invalidates the node's claim.
-
-```bash
-filer update                   # re-index changed files (fast, no LLM staleness check)
-filer update --check-stale     # re-index + LLM staleness check on high-risk nodes
-```
-
-Nodes confirmed stale get `stale_risk = 1.0` and `verified = false`, surfacing them in `filer review`. Nodes the LLM clears get `stale_risk` lowered. The flag is opt-in to keep the git post-commit hook fast and free — use it manually or in CI.
-
----
-
-## filer index — speed flags
-
-Two flags make indexing faster for large repos:
+`filer layer` is the primary command for building and maintaining the knowledge layer.
 
 ```bash
-filer index --parallel 4    # process 4 modules concurrently (recommended: 3–5)
-filer index --fast          # use indexing model (Haiku/kimi-k2.6) for all tasks
-filer index --parallel 4 --fast   # fastest: parallel + cheaper model
-filer index --cost          # estimate API cost before running anything
+# Full build
+filer layer                             # build or rebuild everything
+filer layer --parallel 4                # process 4 modules concurrently (recommended: 3–5)
+filer layer --fast                      # use indexing model (Haiku/kimi-k2.6) for all tasks
+filer layer --parallel 4 --fast         # fastest: parallel + cheaper model
+filer layer --cost                      # estimate API cost before running anything
+filer layer --dry-run                   # show what would be indexed without writing
+
+# Incremental update
+filer layer --update                    # re-index changed files since last commit
+filer layer --update --since HEAD~3     # re-index files changed in last 3 commits
+filer layer --update --check-stale      # re-index + LLM staleness check on high-risk nodes
+filer layer --update --silent           # suppress output (used by git post-commit hook)
 ```
 
-`--parallel` increases throughput at the cost of higher API rate-limit exposure. `--fast` uses the cheaper indexing model for all modules instead of routing deep tasks to the more capable model — good for frequent incremental re-indexes.
+`--update` mode compares file mtimes against node `updated_at` timestamps — only modules with newer files are sent to the LLM. Unchanged modules are skipped instantly.
+
+`--check-stale` runs an LLM-powered staleness verification pass after re-indexing. For each node above the stale threshold, it pulls the git diff for that node's scope since the node was last updated and asks the LLM whether the diff invalidates the node's claim. Nodes confirmed stale get `stale_risk = 1.0` and `verified = false`, surfacing them in `filer review`. The flag is opt-in to keep the git post-commit hook fast and free — use it manually or in CI.
 
 ---
 
@@ -444,10 +446,10 @@ filer index --cost          # estimate API cost before running anything
 
 | Event | Trigger | What it does |
 |-------|---------|--------------|
-| `commit` | post-push | `filer update` — re-index changed files |
+| `commit` | post-push | `filer layer --update` — re-index changed files |
 | `pr_merged` | PR closed | `filer learn` — mine review comments for new nodes |
 | `ci` | CI run | `filer scan --ci` — fail on high-severity findings |
-| `scheduled` | nightly | `filer update --check-stale` — LLM staleness check |
+| `scheduled` | nightly | `filer layer --update --check-stale` — LLM staleness check |
 
 ```bash
 # Run manually
@@ -536,7 +538,7 @@ Sign up for Kimi at [platform.moonshot.ai](https://platform.moonshot.ai).
 
 Zero nodes is better than wrong nodes.
 
-An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence of 0.75 on every node and requires human verification for security nodes. Use `filer verify` to review and approve LLM-inferred nodes before they are trusted.
+An agent that loads a Filer node trusts it. A wrong constraint is worse than no constraint — it actively misleads. Filer enforces a minimum confidence of 0.75 on every node and requires human verification for security nodes. Use `filer review --tty` to interactively approve or reject LLM-inferred nodes before they are trusted.
 
 ---
 
