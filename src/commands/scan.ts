@@ -3,10 +3,12 @@ import fs   from 'fs';
 import { exec } from 'child_process';
 import chalk from 'chalk';
 import ora   from 'ora';
-import { readAllNodes } from '../store/mod.js';
+import { readAllNodes, upsertNode } from '../store/mod.js';
 import { ensureConfig } from './utils.js';
 import { runIndex }   from '../pipeline/indexer.js';
 import { generateReport } from '../report/generator.js';
+import { scanForSecrets, findingsToSecurityNodes } from '../security/secretlint.js';
+import { scanFiles } from '../pipeline/scanner.js';
 
 type FailOnSeverity = 'critical' | 'high' | 'medium';
 
@@ -47,7 +49,27 @@ export async function scanCommand(options: ScanOptions): Promise<void> {
     silent:      false,
   });
 
-  // Read all nodes from disk (includes pre-existing)
+  // ── Secretlint pass: inject hardcoded credential findings as CRITICAL nodes ──
+  {
+    const secSpinner = ora('  Scanning for hardcoded secrets...').start();
+    try {
+      const sourceFiles = await scanFiles(root, config);
+      const { findings } = await scanForSecrets(
+        sourceFiles.map(f => ({ path: f.path, content: f.content }))
+      );
+      const secretNodes = findingsToSecurityNodes(findings);
+      for (const n of secretNodes) upsertNode(root, n as any);
+      if (findings.length > 0) {
+        secSpinner.warn(`  ${findings.length} hardcoded secret(s) found — injected as CRITICAL security nodes`);
+      } else {
+        secSpinner.succeed('  No hardcoded secrets detected');
+      }
+    } catch {
+      secSpinner.stop();  // best-effort
+    }
+  }
+
+  // Read all nodes from disk (includes pre-existing + secretlint nodes)
   const nodes = readAllNodes(root);
 
   // Generate report

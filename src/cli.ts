@@ -112,6 +112,7 @@ program
   .option('--top-files <n>',             'Show N largest files in summary (default: 5)')
   .option('--max-file-size <kb>',        'Skip files above this size in KB (default: 500)')
   .option('--no-gitignore',              'Do not respect .gitignore')
+  .option('--no-security-check',         'Skip secretlint scan for hardcoded secrets before packing')
   .option('--no-instructions',           'Skip prepending filer.md instructions')
   .option('--instructions <path>',       'Custom instruction file to prepend')
   .option('--header-text <text>',        'Custom header text')

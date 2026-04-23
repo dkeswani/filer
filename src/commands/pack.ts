@@ -13,6 +13,7 @@ import { buildTree, renderTree }      from '../pack/tree.js';
 import { cloneRemote }                from '../pack/remote.js';
 import { readConfig, filerExists }    from '../store/mod.js';
 import { LLMGateway }                 from '../llm/mod.js';
+import { scanForSecrets, formatSecretWarnings } from '../security/secretlint.js';
 
 export interface PackOptions {
   scope?:             string;
@@ -45,6 +46,7 @@ export interface PackOptions {
   copy?:              boolean;
   stdout?:            boolean;
   quiet?:             boolean;
+  noSecurityCheck?:   boolean;  // --no-security-check: skip secretlint scan
 }
 
 export async function packCommand(options: PackOptions): Promise<void> {
@@ -113,6 +115,25 @@ async function run(
   if (files.length === 0) {
     log(chalk.yellow('  No files found matching filters.'));
     return;
+  }
+
+  // ── Secret scan (pre-LLM safety check) ───────────────────────────────────
+  if (!options.noSecurityCheck) {
+    const secSpinner = isTTY ? ora('  Scanning for secrets...').start() : null;
+    try {
+      const { findings } = await scanForSecrets(
+        files.map(f => ({ path: f.path, content: f.content }))
+      );
+      if (findings.length > 0) {
+        secSpinner?.warn(`  ${findings.length} potential secret(s) detected`);
+        process.stderr.write(chalk.yellow('\n' + formatSecretWarnings(findings)));
+        process.stderr.write(chalk.dim('  Use --no-security-check to suppress. Remove secrets before sharing.\n\n'));
+      } else {
+        secSpinner?.succeed('  No secrets detected');
+      }
+    } catch {
+      secSpinner?.stop();  // best-effort — never block pack on scan failure
+    }
   }
 
   // ── Task-based selection ──────────────────────────────────────────────────
