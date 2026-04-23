@@ -153,7 +153,9 @@ filer review --tty                      # interactive y/n node verification
 filer review --apply                    # commit decisions from a reviewed pending.json
 
 # Security
-filer scan                              # full scan → .filer/report.html
+filer secrets                           # fast static scan for hardcoded credentials (no LLM)
+filer secrets --ci                      # CI mode — exits non-zero if any secrets found
+filer scan                              # full LLM scan → .filer/report.html
 filer scan --ci --fail-on high          # CI mode — exits non-zero on high/critical
 
 # Learning
@@ -196,7 +198,10 @@ The git post-commit hook installed by `filer init` runs `filer layer --update --
 
 | Command | Description |
 |---------|-------------|
-| `filer scan [options]` | Run a full security scan and generate an HTML report |
+| `filer secrets [options]` | Fast static scan for hardcoded credentials — no LLM, instant results |
+| `filer scan [options]` | Full LLM security scan — generates an HTML severity report |
+
+`filer secrets` options: `--scope <path>`, `--json`, `--ci`
 
 `filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--no-open`, `--force`, `--ci`, `--fail-on critical|high|medium`
 
@@ -272,9 +277,24 @@ The MCP server exposes eight tools: `filer_scope`, `filer_query`, `filer_node`, 
 
 ---
 
+## filer secrets
+
+`filer secrets` is a fast, zero-cost static scan for hardcoded credentials — API keys, tokens, passwords — using [secretlint](https://github.com/secretlint/secretlint) under the hood. No LLM calls, no indexing required.
+
+```bash
+filer secrets                       # scan entire repo, print grouped findings
+filer secrets --scope src/auth/     # limit to a subdirectory
+filer secrets --json                # machine-readable JSON output
+filer secrets --ci                  # exit 1 if any secrets found (for CI pipelines)
+```
+
+Use this as a pre-commit check or a lightweight CI gate. For a deeper report that includes architectural risks, dangerous patterns, and assumptions alongside credential findings, use `filer scan`.
+
+---
+
 ## filer scan
 
-`filer scan` runs a full security-focused extraction pass and writes a self-contained HTML report to `.filer/report.html`.
+`filer scan` runs a full LLM-powered security-focused extraction pass and writes a self-contained HTML report to `.filer/report.html`. It also runs `filer secrets` internally and injects any credential findings as CRITICAL nodes.
 
 ```bash
 filer scan                          # scan entire repo, open report when done
