@@ -20,6 +20,7 @@ import { benchmarkCommand }  from './commands/benchmark.js';
 import { mcpCommand }        from './commands/mcp.js';
 import { wizardCommand }     from './commands/wizard.js';
 import { scanCommand }       from './commands/scan.js';
+import { secretsCommand }    from './commands/secrets.js';
 import { reviewCommand }     from './commands/review.js';
 import { exportCommand }     from './commands/export.js';
 import { packCommand }       from './commands/pack.js';
@@ -70,6 +71,14 @@ program
   .action((options) => layerCommand(options).catch(err));
 
 // ── Security ──────────────────────────────────────────────────────────────────
+
+program
+  .command('secrets')
+  .description('Scan for hardcoded secrets and credentials (no LLM — fast static analysis)')
+  .option('--scope <path>',  'Limit to a specific directory')
+  .option('--json',          'Output findings as JSON')
+  .option('--ci',            'Exit non-zero if any secrets are found')
+  .action((options) => secretsCommand(options).catch(err));
 
 program
   .command('scan')
