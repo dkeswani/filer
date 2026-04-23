@@ -110,16 +110,31 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
 
   const existingNodes = readAllNodes(root);
 
-  // Build a lookup: module path prefix → newest node updated_at (ms)
-  // Used to skip modules where no file has changed since last index run
+  // Build a lookup: module path → newest node updated_at (ms)
+  // Uses the same scope-matching logic as existingIds to correctly associate nodes with modules
   const moduleIndexedAt = new Map<string, number>();
   for (const node of existingNodes) {
     const t = new Date(node.updated_at).getTime();
+    // A node belongs to a module if any scope overlaps with the module path
+    // We defer this per-module below, so just track per-scope for now
     for (const s of node.scope) {
-      const prev = moduleIndexedAt.get(s) ?? 0;
-      if (t > prev) moduleIndexedAt.set(s, t);
+      const clean = s.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+      const prev = moduleIndexedAt.get(clean) ?? 0;
+      if (t > prev) moduleIndexedAt.set(clean, t);
     }
   }
+
+  // Helper: get the newest indexed_at for a module based on scope overlap
+  const getModuleIndexedAt = (mod: Module): number => {
+    let newest = 0;
+    const modClean = mod.path.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+    for (const [scope, t] of moduleIndexedAt) {
+      if (modClean.startsWith(scope) || scope.startsWith(modClean) || scope === modClean) {
+        if (t > newest) newest = t;
+      }
+    }
+    return newest;
+  };
 
   // If --fast, patch gateway to route all tasks through indexing_model
   if (opts.fast) {
@@ -149,7 +164,7 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
 
       // Skip module if already indexed and no file has been modified since
       if (!opts.force && existingIds.length > 0) {
-        const indexedAt = moduleIndexedAt.get(mod.path) ?? 0;
+        const indexedAt = getModuleIndexedAt(mod);
         const newestFile = Math.max(...mod.files.map(f => f.mtimeMs));
         if (newestFile <= indexedAt) {
           completed++;
