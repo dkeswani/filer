@@ -128,7 +128,7 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
   const getModuleIndexedAt = (mod: Module): number => {
     let newest = 0;
     const modClean = mod.path.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
-    const modFiles = new Set(mod.files.map(f => f.path));
+    const modFiles = new Set(mod.files.map(f => f.path.replace(/\\/g, '/')));
     for (const [scope, t] of moduleIndexedAt) {
       const matches = modClean && modClean !== '.'
         ? (modClean.startsWith(scope) || scope.startsWith(modClean) || scope === modClean)
@@ -160,7 +160,7 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
       : null;
 
     try {
-      const modFiles = new Set(mod.files.map(f => f.path));
+      const modFiles = new Set(mod.files.map(f => f.path.replace(/\\/g, '/')));
       const existingIds = existingNodes
         .filter(n => n.scope.some(s => {
           const sClean = s.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
