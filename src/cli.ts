@@ -244,8 +244,8 @@ program
 
 program
   .command('agent')
-  .description('Run the Filer agent — event-driven orchestrator for CI/CD pipelines')
-  .option('--event <type>',   'Event type: commit | pr_merged | ci | scheduled')
+  .description('Run the Filer agent — ReAct reasoning loop (no --event) or event-driven orchestrator (--event)')
+  .option('--event <type>',   'Event type: commit | pr_merged | ci | scheduled (omit for ReAct loop)')
   .option('--pr <number>',    'PR number (for pr_merged event)')
   .option('--since <ref>',    'Git ref to diff from (for commit event, default: HEAD~1)')
   .option('--auto-apply',     'Auto-apply learned nodes with confidence >= 0.85')

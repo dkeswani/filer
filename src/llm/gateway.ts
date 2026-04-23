@@ -16,7 +16,8 @@ export type LLMTask =
   | 'learn.classify'     // classify PR review comment signal — indexing model
   | 'learn.propose'      // propose new node from review pattern — deep model
   | 'query.answer'       // answer a natural language query — deep model
-  | 'verify.check';      // staleness check — indexing model
+  | 'verify.check'       // staleness check — indexing model
+  | 'agent.reason';      // ReAct agent reasoning — deep model
 
 // ── Gateway ───────────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export class LLMGateway {
 
   private modelForTask(task: LLMTask): string {
     const { llm } = this.config;
-    const deepTasks: LLMTask[] = ['extract.full', 'learn.propose', 'query.answer'];
+    const deepTasks: LLMTask[] = ['extract.full', 'learn.propose', 'query.answer', 'agent.reason'];
     return deepTasks.includes(task) ? llm.deep_model : llm.indexing_model;
   }
 

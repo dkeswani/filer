@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { filerExists } from '../store/mod.js';
 import { parseEvent, type AgentEventContext } from '../agent/events.js';
 import { runOrchestrator } from '../agent/orchestrator.js';
+import { runReActLoop }    from '../agent/loop.js';
 
 export interface AgentOptions {
   event?:     string;
@@ -20,11 +21,14 @@ export async function agentCommand(options: AgentOptions): Promise<void> {
     process.exit(1);
   }
 
+  // No --event → ReAct reasoning loop (Phase 2): LLM decides what to do
   if (!options.event) {
-    console.error(chalk.red('\n  Error: --event is required. Use: commit | pr_merged | ci | scheduled\n'));
-    process.exit(1);
+    const result = await runReActLoop(root, { dryRun: options.dryRun });
+    if (!result.success) process.exit(1);
+    return;
   }
 
+  // --event → deterministic orchestrator (Phase 1)
   let event: ReturnType<typeof parseEvent>;
   try {
     event = parseEvent(options.event);
