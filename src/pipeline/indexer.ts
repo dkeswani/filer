@@ -128,10 +128,12 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
   const getModuleIndexedAt = (mod: Module): number => {
     let newest = 0;
     const modClean = mod.path.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+    const modFiles = new Set(mod.files.map(f => f.path));
     for (const [scope, t] of moduleIndexedAt) {
-      if (modClean.startsWith(scope) || scope.startsWith(modClean) || scope === modClean) {
-        if (t > newest) newest = t;
-      }
+      const matches = modClean && modClean !== '.'
+        ? (modClean.startsWith(scope) || scope.startsWith(modClean) || scope === modClean)
+        : (modFiles.has(scope) || [...modFiles].some(f => f.startsWith(scope)));
+      if (matches && t > newest) newest = t;
     }
     return newest;
   };
@@ -158,8 +160,17 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
       : null;
 
     try {
+      const modFiles = new Set(mod.files.map(f => f.path));
       const existingIds = existingNodes
-        .filter(n => n.scope.some(s => mod.path.startsWith(s) || s.startsWith(mod.path)))
+        .filter(n => n.scope.some(s => {
+          const sClean = s.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+          const mClean = mod.path.replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '');
+          // Direct path overlap
+          if (mClean && (mClean.startsWith(sClean) || sClean.startsWith(mClean))) return true;
+          // Root module (path='.') — match by file membership
+          if (!mClean || mClean === '.') return modFiles.has(s) || [...modFiles].some(f => f.startsWith(sClean));
+          return false;
+        }))
         .map(n => n.id);
 
       // Skip module if already indexed and no file has been modified since
