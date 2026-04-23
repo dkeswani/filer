@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs   from 'fs';
 import os   from 'os';
 import path from 'path';
-import { groupIntoModules } from '../pipeline/scanner.js';
+import { groupIntoModules, chunkLargeFile, CHUNK_LINE_THRESHOLD } from '../pipeline/scanner.js';
 import type { SourceFile } from '../pipeline/scanner.js';
 import type { FilerConfig } from '../schema/mod.js';
 
@@ -32,6 +32,7 @@ function makeFile(filePath: string, content = 'x'.repeat(100)): SourceFile {
     absolutePath: `/repo/${filePath}`,
     content,
     sizeBytes: content.length,
+    mtimeMs:   Date.now(),
   };
 }
 
@@ -117,5 +118,80 @@ describe('groupIntoModules', () => {
     const modules = groupIntoModules(files, config);
     expect(modules.some(m => m.path === 'packages/auth')).toBe(true);
     expect(modules.some(m => m.path === 'packages/payments')).toBe(true);
+  });
+});
+
+describe('chunkLargeFile', () => {
+  function makeLines(count: number, prefix = 'const x = 1;'): string {
+    return Array.from({ length: count }, (_, i) => `${prefix} // line ${i}`).join('\n');
+  }
+
+  it('returns the file unchanged when under threshold', () => {
+    const file = makeFile('src/small.ts', makeLines(100));
+    const result = chunkLargeFile(file);
+    expect(result).toHaveLength(1);
+    expect(result[0].chunkInfo).toBeUndefined();
+    expect(result[0].content).toBe(file.content);
+  });
+
+  it('returns the file unchanged when exactly at threshold', () => {
+    const file = makeFile('src/edge.ts', makeLines(CHUNK_LINE_THRESHOLD));
+    const result = chunkLargeFile(file);
+    expect(result).toHaveLength(1);
+    expect(result[0].chunkInfo).toBeUndefined();
+  });
+
+  it('chunks a file with export boundaries when over threshold', () => {
+    const bodyLines = (prefix: string) =>
+      Array.from({ length: 950 }, (_, i) => `  const ${prefix}${i} = ${i};`).join('\n');
+    const content = [
+      `export function alpha() {\n${bodyLines('a')}\n}`,
+      `export function beta() {\n${bodyLines('b')}\n}`,
+      `export function gamma() {\n${bodyLines('c')}\n}`,
+    ].join('\n');
+
+    const file = makeFile('src/large.ts', content);
+    const result = chunkLargeFile(file);
+
+    expect(result.length).toBeGreaterThan(1);
+    for (const chunk of result) {
+      expect(chunk.path).toBe('src/large.ts');
+      expect(chunk.chunkInfo).toBeDefined();
+      expect(chunk.chunkInfo!.total).toBe(result.length);
+    }
+    const indices = result.map(c => c.chunkInfo!.index);
+    expect(indices).toEqual(Array.from({ length: result.length }, (_, i) => i + 1));
+  });
+
+  it('preserves all content across chunks (no lines lost or duplicated)', () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      if (i % 1000 === 0) lines.push(`export function fn${i}() {`);
+      else if (i % 1000 === 999) lines.push('}');
+      else lines.push(`  const v${i} = ${i};`);
+    }
+    const content = lines.join('\n');
+    const file = makeFile('src/big.ts', content);
+    const result = chunkLargeFile(file);
+
+    const rejoined = result.map(c => c.content).join('\n');
+    expect(rejoined).toBe(content);
+  });
+
+  it('keeps original path and mtimeMs on all chunks', () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 5000; i++) {
+      if (i % 1200 === 0) lines.push(`export function f${i}() {`);
+      else if (i % 1200 === 1199) lines.push('}');
+      else lines.push(`  const x${i} = ${i};`);
+    }
+    const file = makeFile('src/multi.ts', lines.join('\n'));
+    const result = chunkLargeFile(file);
+
+    for (const chunk of result) {
+      expect(chunk.path).toBe(file.path);
+      expect(chunk.absolutePath).toBe(file.absolutePath);
+      expect(chunk.mtimeMs).toBe(file.mtimeMs);
+    }
   });
 });

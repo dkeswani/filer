@@ -1,3 +1,4 @@
+import fs    from 'fs';
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { execSync } from 'child_process';
@@ -23,6 +24,7 @@ interface LearnOptions {
   pr?:         string;
   autoApply?:  boolean;
   dryRun?:     boolean;
+  fromFile?:   string;   // path to a text file of raw review comments
 }
 
 // ── GitHub types ──────────────────────────────────────────────────────────────
@@ -66,6 +68,16 @@ interface Cluster {
   signals:       Signal[];
   keywords:      string[];
   existingNode:  AnyNode | null;
+}
+
+// ── File-based comment parser ─────────────────────────────────────────────────
+
+export function parseCommentsFile(
+  content: string
+): Array<{ pr: number; author: string; text: string; file: string }> {
+  // Split on blank lines to get paragraphs; treat each non-empty paragraph as a comment
+  const paragraphs = content.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length >= 10);
+  return paragraphs.map(text => ({ pr: 0, author: 'file', text, file: '' }));
 }
 
 // ── GitHub helpers ────────────────────────────────────────────────────────────
@@ -335,13 +347,88 @@ export async function learnCommand(options: LearnOptions): Promise<void> {
     process.exit(1);
   }
 
-  const token = await getGitHubToken();
-
   const config = readConfig(root);
   if (!config) {
     console.error(chalk.red('\n  No .filer-config.json found.\n'));
     process.exit(1);
   }
+
+  const gateway = new LLMGateway(config);
+  const existingNodes = readAllNodes(root);
+
+  // ── --from-file path: skip GitHub entirely ─────────────────────────────────
+  if (options.fromFile) {
+    let fileContent: string;
+    try {
+      fileContent = fs.readFileSync(options.fromFile, 'utf-8');
+    } catch {
+      console.error(chalk.red(`\n  Cannot read file: ${options.fromFile}\n`));
+      process.exit(1);
+    }
+
+    const allComments = parseCommentsFile(fileContent);
+
+    console.log(chalk.bold('\n  Filer Learn — From File\n'));
+    console.log(chalk.dim(`  File:     ${options.fromFile}`));
+    console.log(chalk.dim(`  Comments: ${allComments.length}`));
+    if (options.dryRun)    console.log(chalk.yellow('  Mode:     dry-run'));
+    if (options.autoApply) console.log(chalk.cyan('  Mode:     auto-apply (confidence ≥ 0.85)'));
+    console.log();
+
+    if (allComments.length === 0) {
+      console.log(chalk.yellow('  No comments found in file (need blank-line separated paragraphs ≥ 10 chars).\n'));
+      return;
+    }
+
+    process.stdout.write(chalk.dim('  Classifying signals...'));
+    const signals = await classifyComments(allComments, gateway);
+    process.stdout.write(chalk.dim(` ${signals.length} signals found\n`));
+
+    if (signals.length === 0) {
+      console.log(chalk.yellow('\n  No institutional knowledge signals found.\n'));
+      return;
+    }
+
+    let clusters = clusterSignals(signals);
+    clusters = crossReferenceNodes(clusters, existingNodes);
+    console.log(chalk.dim(`  Clusters formed: ${clusters.length}\n`));
+
+    const proposals: Array<{ cluster: Cluster; node: AnyNode }> = [];
+    for (let i = 0; i < clusters.length; i++) {
+      process.stdout.write(chalk.dim(`\r  Proposing node ${i + 1}/${clusters.length}...`));
+      const node = await proposeNode(clusters[i], gateway);
+      if (node) proposals.push({ cluster: clusters[i], node });
+    }
+    process.stdout.write('\r' + ' '.repeat(60) + '\r');
+    console.log(chalk.dim(`  Proposals generated: ${proposals.length}\n`));
+
+    if (proposals.length === 0) {
+      console.log(chalk.yellow('  No quality proposals generated.\n'));
+      return;
+    }
+
+    if (options.autoApply && !options.dryRun) {
+      let applied = 0;
+      for (const { node } of proposals) {
+        if (node.confidence >= 0.85) {
+          upsertNode(root, node);
+          console.log(chalk.green(`  ✓ Auto-applied: ${node.id} (${Math.round(node.confidence * 100)}%)`));
+          applied++;
+        }
+      }
+      console.log(chalk.bold(`\n  Applied ${applied}/${proposals.length} proposals.\n`));
+      return;
+    }
+
+    const { applied, skipped } = await interactiveApply(proposals, root, options.dryRun ?? false);
+    console.log(chalk.bold('\n  Summary:'));
+    console.log(`  ${chalk.green(String(applied))} applied  ${chalk.dim(String(skipped))} skipped\n`);
+    return;
+  }
+
+  // ── GitHub path ────────────────────────────────────────────────────────────
+
+  const token = await getGitHubToken();
 
   const repoInfo = detectRepoInfo(root);
   if (!repoInfo) {
@@ -350,8 +437,6 @@ export async function learnCommand(options: LearnOptions): Promise<void> {
   }
 
   const { owner, repo } = repoInfo;
-  const gateway = new LLMGateway(config);
-  const existingNodes = readAllNodes(root);
 
   console.log(chalk.bold('\n  Filer Learn\n'));
   console.log(chalk.dim(`  Repo:  ${owner}/${repo}`));

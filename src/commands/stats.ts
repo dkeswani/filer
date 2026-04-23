@@ -87,6 +87,50 @@ export async function statsCommand(): Promise<void> {
     console.log('\n  ' + chalk.green('✓  All clear — no stale or unverified security nodes'));
   }
 
+  // ── KCI/AUI per-module breakdown ──────────────────────────────────────────
+
+  const moduleMap = new Map<string, { nodes: typeof nodes }>();
+  for (const node of nodes) {
+    const mod = node.scope[0] ?? '.';
+    if (!moduleMap.has(mod)) moduleMap.set(mod, { nodes: [] });
+    moduleMap.get(mod)!.nodes.push(node);
+  }
+
+  if (moduleMap.size > 1) {
+    const moduleStats = [...moduleMap.entries()].map(([mod, { nodes: mNodes }]) => {
+      const verified  = mNodes.filter(n => n.verified).length;
+      const agentIdx  = mNodes.filter(n => n.indexed_by.startsWith('agent:')).length;
+      const kci       = mNodes.length > 0 ? Math.round((verified / mNodes.length) * 100) / 100 : 0;
+      const aui       = mNodes.length > 0 ? Math.round((agentIdx / mNodes.length) * 100) / 100 : 0;
+      return { mod, count: mNodes.length, kci, aui };
+    });
+
+    // Sort by node count descending, show top 10
+    moduleStats.sort((a, b) => b.count - a.count);
+    const top = moduleStats.slice(0, 10);
+
+    console.log('\n  ' + chalk.bold('Module Coverage (KCI / AUI)'));
+    console.log(chalk.dim('  ' + 'Module'.padEnd(36) + 'Nodes  KCI   AUI'));
+    console.log(chalk.dim('  ' + '─'.repeat(54)));
+
+    for (const m of top) {
+      const modLabel  = m.mod.slice(0, 34).padEnd(36);
+      const kciStr    = m.kci.toFixed(2);
+      const auiStr    = m.aui.toFixed(2);
+      const auiColor  = m.aui >= 0.5 ? chalk.yellow : chalk.dim;
+      console.log(
+        '  ' + chalk.dim(modLabel) +
+        String(m.count).padStart(5) + '  ' +
+        chalk.green(kciStr) + '  ' +
+        auiColor(auiStr) +
+        (m.aui >= 0.5 ? chalk.yellow('  ⚠ high agent-code ratio') : '')
+      );
+    }
+    if (moduleStats.length > 10) {
+      console.log(chalk.dim(`  ... and ${moduleStats.length - 10} more modules`));
+    }
+  }
+
   console.log();
 }
 

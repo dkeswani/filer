@@ -10,12 +10,13 @@ import { ensureConfig } from './utils.js';
 
 export interface LayerOptions {
   // Build mode (default)
-  scope?:       string;
-  force?:       boolean;
-  dryRun?:      boolean;
-  cost?:        boolean;
-  parallel?:    string;
-  fast?:        boolean;
+  scope?:           string;
+  force?:           boolean;
+  dryRun?:          boolean;
+  cost?:            boolean;
+  parallel?:        string;
+  fast?:            boolean;
+  detectConflicts?: boolean;  // --detect-conflicts: LLM check for contradicting node pairs
   // Update mode
   update?:      boolean;   // --update: incremental re-index from last commit
   since?:       string;    // --since <ref>: git ref to diff from
@@ -89,11 +90,12 @@ export async function layerCommand(options: LayerOptions): Promise<void> {
 
   const result = await runIndex({
     root,
-    scope:       options.scope,
-    force:       options.force,
-    dryRun:      options.dryRun,
+    scope:            options.scope,
+    force:            options.force,
+    dryRun:           options.dryRun,
     concurrency,
-    fast:        options.fast,
+    fast:             options.fast,
+    detectConflicts:  options.detectConflicts,
   });
 
   if (options.dryRun) return;
@@ -105,6 +107,9 @@ export async function layerCommand(options: LayerOptions): Promise<void> {
 
   if (result.nodes_rejected > 0) {
     console.log(`  ${chalk.yellow('⚠')} Nodes rejected:    ${result.nodes_rejected} ${chalk.dim('(below confidence threshold)')}`);
+  }
+  if (result.nodes_conflicted > 0) {
+    console.log(`  ${chalk.red('⚡')} Nodes conflicted:  ${result.nodes_conflicted} ${chalk.dim('(queued for review — run filer review)')}`);
   }
   if (result.errors.length > 0) {
     console.log(`\n  ${chalk.red('✗')} Errors: ${result.errors.length}`);

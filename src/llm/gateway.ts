@@ -17,6 +17,7 @@ export type LLMTask =
   | 'learn.propose'      // propose new node from review pattern — deep model
   | 'query.answer'       // answer a natural language query — deep model
   | 'verify.check'       // staleness check — indexing model
+  | 'conflict.detect'   // node conflict detection — indexing model (lightweight classification)
   | 'agent.reason';      // ReAct agent reasoning — deep model
 
 // ── Gateway ───────────────────────────────────────────────────────────────────

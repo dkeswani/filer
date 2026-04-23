@@ -6,6 +6,7 @@ import {
   groupIntoModules,
   getChangedFiles,
   getCurrentCommit,
+  isAgentCommit,
   type Module,
 } from './scanner.js';
 import { extractNodes, estimateModuleTokens } from './extractor.js';
@@ -20,16 +21,20 @@ import {
 import { LLMGateway }    from '../llm/mod.js';
 import type { AnyNode }  from '../schema/mod.js';
 import { checkStaleness } from './staleness.js';
+import { detectConflicts } from './conflicts.js';
+import { writeBundle, readBundle, PENDING_FILE, type ReviewBundle } from '../review/bundle.js';
 
 export interface IndexOptions {
-  root:         string;
-  scope?:       string;      // limit to a subdirectory
-  force?:       boolean;     // re-index already-indexed files
-  dryRun?:      boolean;
-  silent?:      boolean;
-  changedOnly?: string[];    // for incremental updates — only these file paths
-  concurrency?: number;      // parallel module processing (default: 1)
-  fast?:        boolean;     // use indexing_model for all tasks (faster + cheaper)
+  root:             string;
+  scope?:           string;      // limit to a subdirectory
+  force?:           boolean;     // re-index already-indexed files
+  dryRun?:          boolean;
+  silent?:          boolean;
+  changedOnly?:     string[];    // for incremental updates — only these file paths
+  concurrency?:     number;      // parallel module processing (default: 1)
+  fast?:            boolean;     // use indexing_model for all tasks (faster + cheaper)
+  detectConflicts?: boolean;     // check new nodes for semantic contradictions with existing ones
+  agentAuthored?:  boolean;      // tag nodes indexed_by 'agent:<model>' (code was written by an agent)
 }
 
 export interface IndexResult {
@@ -37,6 +42,7 @@ export interface IndexResult {
   nodes_created:      number;
   nodes_updated:      number;
   nodes_rejected:     number;
+  nodes_conflicted:   number;    // nodes that were queued for review due to conflicts
   files_indexed:      number;
   estimated_usd:      number;
   errors:             string[];
@@ -74,7 +80,7 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
 
   if (files.length === 0) {
     log(chalk.yellow('\n  No source files found matching include patterns.\n'));
-    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, files_indexed: 0, estimated_usd: 0, errors: [] };
+    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, nodes_conflicted: 0, files_indexed: 0, estimated_usd: 0, errors: [] };
   }
 
   // Group into modules
@@ -94,7 +100,7 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
   if (opts.dryRun) {
     log(chalk.yellow('\n  Dry run — no changes written.\n'));
     printModuleList(modules, log);
-    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, files_indexed: files.length, estimated_usd: estimatedCost, errors: [] };
+    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, nodes_conflicted: 0, files_indexed: files.length, estimated_usd: estimatedCost, errors: [] };
   }
 
   // Process each module
@@ -103,10 +109,13 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
     nodes_created:     0,
     nodes_updated:     0,
     nodes_rejected:    0,
+    nodes_conflicted:  0,
     files_indexed:     files.length,
     estimated_usd:     0,
     errors:            [],
   };
+
+  const newNodesBuffer: AnyNode[] = [];  // accumulate newly written nodes for conflict check
 
   const existingNodes = readAllNodes(root);
 
@@ -186,10 +195,11 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
       }
 
       const extraction = await extractNodes(gateway, {
-        modulePath:  mod.path,
-        files:       mod.files.map(f => ({ path: f.path, content: f.content })),
-        repoName:    config.version,
-        existingIds: opts.force ? [] : existingIds,
+        modulePath:    mod.path,
+        files:         mod.files.map(f => ({ path: f.path, content: f.content, chunkInfo: f.chunkInfo })),
+        repoName:      config.version,
+        existingIds:   opts.force ? [] : existingIds,
+        agentAuthored: opts.agentAuthored,
       });
 
       result.nodes_rejected  += extraction.rejected.length;
@@ -203,8 +213,8 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
           continue;
         }
         const { created } = upsertNode(root, node);
-        if (created) result.nodes_created++;
-        else         result.nodes_updated++;
+        if (created) { result.nodes_created++; newNodesBuffer.push(node); }
+        else           result.nodes_updated++;
       }
 
       result.modules_processed++;
@@ -235,6 +245,48 @@ export async function runIndex(opts: IndexOptions): Promise<IndexResult> {
     sharedSpinner?.succeed(`  Indexed ${completed}/${modules.length} modules`);
   }
 
+  // Conflict detection pass (opt-in)
+  if (opts.detectConflicts && newNodesBuffer.length > 0) {
+    const conflictSpinner = silent ? null : ora('  Checking for node conflicts...').start();
+    try {
+      const allNodes   = readAllNodes(root);
+      const conflicts  = await detectConflicts(gateway, newNodesBuffer, allNodes);
+      result.nodes_conflicted = conflicts.length;
+
+      if (conflicts.length > 0) {
+        // Append conflicts to pending.json so they surface in filer review
+        const existing  = readBundle(root);
+        const items     = existing?.review_items ?? [];
+        const now       = new Date().toISOString();
+
+        for (const c of conflicts) {
+          items.push({
+            id:             c.newNode.id,
+            type:           c.newNode.type,
+            severity:       'CONFLICT',
+            status:         'pending' as const,
+            node:           c.newNode,
+            confidence:     c.newNode.confidence,
+            requires_human: true,
+            review_comment: `Conflicts with ${c.existingNode.id}: ${c.explanation}`,
+          });
+        }
+
+        const bundle: ReviewBundle = {
+          generated_at: now,
+          repo:         root.split('/').pop() ?? 'repo',
+          review_items: items,
+        };
+        writeBundle(root, bundle);
+        conflictSpinner?.warn(`  ${conflicts.length} conflict(s) queued for review → filer review`);
+      } else {
+        conflictSpinner?.succeed('  No conflicts detected');
+      }
+    } catch {
+      conflictSpinner?.fail('  Conflict detection failed (non-fatal)');
+    }
+  }
+
   // Rebuild index
   const commit = getCurrentCommit(root);
   const index  = buildIndex(root, {
@@ -261,14 +313,15 @@ export async function runUpdate(root: string, opts: { silent?: boolean; checkSta
       await runStalenessCheck(root, opts.silent);
     }
 
-    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, files_indexed: 0, estimated_usd: 0, errors: [] };
+    return { modules_processed: 0, nodes_created: 0, nodes_updated: 0, nodes_rejected: 0, nodes_conflicted: 0, files_indexed: 0, estimated_usd: 0, errors: [] };
   }
 
   if (!opts.silent) {
     console.log(chalk.dim(`  ${changed.length} changed file(s) — running incremental update`));
   }
 
-  const result = await runIndex({ root, changedOnly: changed, silent: opts.silent });
+  const agentAuthored = isAgentCommit(root);
+  const result = await runIndex({ root, changedOnly: changed, silent: opts.silent, agentAuthored });
 
   if (opts.checkStale) {
     await runStalenessCheck(root, opts.silent);

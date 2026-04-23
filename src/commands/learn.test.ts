@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clusterSignals, crossReferenceNodes } from './learn.js';
+import { clusterSignals, crossReferenceNodes, parseCommentsFile } from './learn.js';
 import type { AnyNode } from '../schema/mod.js';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -133,5 +133,49 @@ describe('crossReferenceNodes', () => {
   it('handles empty clusters list', () => {
     const nodes = [makeConstraint()];
     expect(crossReferenceNodes([], nodes)).toHaveLength(0);
+  });
+});
+
+describe('parseCommentsFile', () => {
+  it('splits blank-line-separated paragraphs into comments', () => {
+    const content = `Never bypass the rate limiter — this has caused outages before.
+
+Always verify the Stripe signature before processing webhook payloads.
+
+Do not log raw request bodies — they contain PII.`;
+
+    const result = parseCommentsFile(content);
+    expect(result).toHaveLength(3);
+    expect(result[0].text).toContain('rate limiter');
+    expect(result[1].text).toContain('Stripe signature');
+    expect(result[2].text).toContain('PII');
+  });
+
+  it('assigns pr=0, author=file, file="" to all comments', () => {
+    const content = `Never do this thing.\n\nAlways do that other thing.`;
+    const result = parseCommentsFile(content);
+    for (const c of result) {
+      expect(c.pr).toBe(0);
+      expect(c.author).toBe('file');
+      expect(c.file).toBe('');
+    }
+  });
+
+  it('filters out short paragraphs (< 10 chars)', () => {
+    const content = `ok\n\nThis is a substantial review comment that should be included.\n\nshort`;
+    const result = parseCommentsFile(content);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toContain('substantial');
+  });
+
+  it('handles empty file', () => {
+    expect(parseCommentsFile('')).toHaveLength(0);
+    expect(parseCommentsFile('   \n\n   ')).toHaveLength(0);
+  });
+
+  it('handles Windows line endings', () => {
+    const content = `Never bypass auth.\r\n\r\nAlways verify tokens before use.`;
+    const result = parseCommentsFile(content);
+    expect(result.length).toBeGreaterThanOrEqual(1);
   });
 });

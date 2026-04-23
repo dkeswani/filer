@@ -87,12 +87,17 @@ id, type, scope (array of paths), confidence (0.0-1.0), tags (array), must_not (
 
 export function buildExtractionPrompt(opts: {
   modulePath:  string;
-  files:       Array<{ path: string; content: string }>;
+  files:       Array<{ path: string; content: string; chunkInfo?: { index: number; total: number } }>;
   repoName:    string;
   existingIds: string[];  // already-indexed node IDs for this scope
 }): string {
   const fileBlock = opts.files
-    .map(f => `--- ${f.path} ---\n${f.content}`)
+    .map(f => {
+      const header = f.chunkInfo
+        ? `--- ${f.path} [chunk ${f.chunkInfo.index}/${f.chunkInfo.total}] ---`
+        : `--- ${f.path} ---`;
+      return `${header}\n${f.content}`;
+    })
     .join('\n\n');
 
   const existingNote = opts.existingIds.length > 0

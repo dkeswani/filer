@@ -66,6 +66,7 @@ program
   .option('--force',               'Re-index already-indexed files')
   .option('--dry-run',             'Show what would be indexed without writing')
   .option('--cost',                'Estimate API cost without making any calls')
+  .option('--detect-conflicts',    'Check new nodes for semantic contradictions with existing ones')
   .action((options) => layerCommand(options).catch(err));
 
 // ── Security ──────────────────────────────────────────────────────────────────
@@ -168,10 +169,11 @@ program
 program
   .command('learn')
   .description('Learn from PR review comments — propose new knowledge nodes')
-  .option('--since <date>',  'Only fetch PRs merged after this date (YYYY-MM-DD)')
-  .option('--pr <number>',   'Fetch a specific PR by number')
-  .option('--auto-apply',    'Auto-apply nodes with confidence >= 0.85')
-  .option('--dry-run',       'Show proposals without writing nodes')
+  .option('--since <date>',      'Only fetch PRs merged after this date (YYYY-MM-DD)')
+  .option('--pr <number>',       'Fetch a specific PR by number')
+  .option('--from-file <path>',  'Load raw review comments from a file (GitLab, Bitbucket, Slack exports)')
+  .option('--auto-apply',        'Auto-apply nodes with confidence >= 0.85')
+  .option('--dry-run',           'Show proposals without writing nodes')
   .action((options) => learnCommand(options).catch(err));
 
 program

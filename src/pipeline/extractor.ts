@@ -30,11 +30,12 @@ export interface ExtractResult {
 export async function extractNodes(
   gateway: LLMGateway,
   opts: {
-    modulePath:  string;
-    files:       Array<{ path: string; content: string }>;
-    repoName:    string;
-    existingIds: string[];
-    model?:      string;
+    modulePath:    string;
+    files:         Array<{ path: string; content: string; chunkInfo?: { index: number; total: number } }>;
+    repoName:      string;
+    existingIds:   string[];
+    model?:        string;
+    agentAuthored?: boolean;  // tag indexed_by with 'agent:' prefix when code is agent-authored
   }
 ): Promise<ExtractResult> {
   const now     = new Date().toISOString();
@@ -65,8 +66,10 @@ export async function extractNodes(
   const nodes:    AnyNode[] = [];
   const rejected: Array<{ raw: unknown; reason: string }> = [];
 
+  const indexedByPrefix = opts.agentAuthored ? 'agent:' : '';
+
   for (const raw of rawItems) {
-    const result = validateAndEnrich(raw, now, opts.modulePath);
+    const result = validateAndEnrich(raw, now, opts.modulePath, indexedByPrefix);
     if (result.ok) {
       nodes.push(result.node);
     } else {
@@ -94,9 +97,10 @@ type ValidateResult =
   | { ok: false; reason: string };
 
 function validateAndEnrich(
-  raw:        unknown,
-  now:        string,
-  modulePath: string
+  raw:              unknown,
+  now:              string,
+  modulePath:       string,
+  indexedByPrefix = ''
 ): ValidateResult {
   if (typeof raw !== 'object' || raw === null) {
     return { ok: false, reason: 'Not an object' };
@@ -116,7 +120,7 @@ function validateAndEnrich(
     version:    1,
     created_at: now,
     updated_at: now,
-    indexed_by: 'claude-sonnet-4-6',  // set by caller in production
+    indexed_by: `${indexedByPrefix}claude-sonnet-4-6`,
     verified:   false,
     stale_risk: 0,
     // Ensure arrays exist

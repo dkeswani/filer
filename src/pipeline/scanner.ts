@@ -9,6 +9,7 @@ export interface SourceFile {
   content:      string;
   sizeBytes:    number;
   mtimeMs:      number;   // file last-modified timestamp (ms since epoch)
+  chunkInfo?:   { index: number; total: number };  // present when file was split into chunks
 }
 
 export interface Module {
@@ -20,8 +21,10 @@ export interface Module {
 
 // ── File size limits ──────────────────────────────────────────────────────────
 
-const MAX_FILE_BYTES   = 100_000;   // 100KB — skip files larger than this
-const MAX_MODULE_TOKENS = 20_000;   // split modules that exceed this
+const MAX_FILE_BYTES      = 500_000;   // 500KB — skip files larger than this (large files are chunked instead)
+const MAX_MODULE_TOKENS   = 20_000;    // split modules that exceed this
+export const CHUNK_LINE_THRESHOLD = 2000;  // files over this many lines are split into chunks
+const CHUNK_TARGET_LINES  = 1800;      // target lines per chunk
 
 // ── Scan repository for source files ─────────────────────────────────────────
 
@@ -60,13 +63,16 @@ export async function scanFiles(
         continue;
       }
 
-      files.push({
+      const baseFile: SourceFile = {
         path:         rel,
         absolutePath: abs,
         content,
         sizeBytes:    stat.size,
         mtimeMs:      stat.mtimeMs,
-      });
+      };
+
+      const chunks = chunkLargeFile(baseFile);
+      files.push(...chunks);
     }
   }
 
@@ -203,6 +209,54 @@ function splitModule(modPath: string, files: SourceFile[]): Module[] {
   return chunks;
 }
 
+// ── Large file chunking ───────────────────────────────────────────────────────
+
+// Matches top-level symbol declarations at column 0 (no leading whitespace)
+const SYMBOL_BOUNDARY_RE = /^(export\s|module\.exports|function[\s*]\s*\w|async\s+function\s+\w|class\s+\w|def\s+\w|async\s+def\s+\w|func\s+\w)/;
+
+export function chunkLargeFile(file: SourceFile): SourceFile[] {
+  const lines = file.content.split('\n');
+  if (lines.length <= CHUNK_LINE_THRESHOLD) return [file];
+
+  // Collect top-level symbol boundary line indices
+  const boundaries: number[] = [0];
+  for (let i = 1; i < lines.length; i++) {
+    if (SYMBOL_BOUNDARY_RE.test(lines[i])) {
+      boundaries.push(i);
+    }
+  }
+
+  // Group boundaries into chunks targeting CHUNK_TARGET_LINES each
+  const chunkRanges: Array<{ start: number; end: number }> = [];
+  let chunkStart = 0;
+
+  for (let i = 1; i < boundaries.length; i++) {
+    if (boundaries[i] - chunkStart >= CHUNK_TARGET_LINES) {
+      chunkRanges.push({ start: chunkStart, end: boundaries[i] });
+      chunkStart = boundaries[i];
+    }
+  }
+  chunkRanges.push({ start: chunkStart, end: lines.length });
+
+  if (chunkRanges.length === 1) {
+    // Everything fit in one chunk (few or no export boundaries) — no chunkInfo needed
+    return [file];
+  }
+
+  const total = chunkRanges.length;
+  return chunkRanges.map((range, idx) => {
+    const chunkContent = lines.slice(range.start, range.end).join('\n');
+    return {
+      path:         file.path,
+      absolutePath: file.absolutePath,
+      content:      chunkContent,
+      sizeBytes:    chunkContent.length,
+      mtimeMs:      file.mtimeMs,
+      chunkInfo:    { index: idx + 1, total },
+    };
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function estimateTokens(files: SourceFile[]): number {
@@ -245,5 +299,25 @@ export function getCurrentCommit(root: string): string | undefined {
       .toString().trim();
   } catch {
     return undefined;
+  }
+}
+
+// Patterns that indicate a commit was authored by an AI agent
+const AGENT_COMMIT_PATTERNS = [
+  /co-authored-by:.*claude/i,
+  /co-authored-by:.*copilot/i,
+  /co-authored-by:.*chatgpt/i,
+  /co-authored-by:.*gpt-/i,
+  /🤖\s*generated with/i,
+  /generated with \[claude/i,
+  /generated with claude/i,
+];
+
+export function isAgentCommit(root: string, ref = 'HEAD'): boolean {
+  try {
+    const msg = execSync(`git log -1 --format=%B ${ref}`, { cwd: root, stdio: 'pipe' }).toString();
+    return AGENT_COMMIT_PATTERNS.some(re => re.test(msg));
+  } catch {
+    return false;
   }
 }
