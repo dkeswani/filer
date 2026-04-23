@@ -2,10 +2,10 @@
 
 **The knowledge layer for codebases. Context packer. Security scanner. Self-updating agent.**
 
-Filer is a single CLI that does five things no other tool does together:
+Filer is a single CLI that does five things:
 
 1. **Extracts institutional knowledge** from your codebase — constraints, security rules, dangers, patterns, decisions — and stores them as structured nodes in `.filer/` alongside your code.
-2. **Packs your codebase for AI** with `filer pack` — a full Repomix/Codebase Digest replacement that injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
+2. **Packs your codebase for AI** with `filer pack` — injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
 3. **Scans for security issues** with `filer scan` — generates an HTML severity report and integrates with CI via `--ci --fail-on high`.
 4. **Learns from code review** with `filer learn` — mines PR review comments from GitHub, identifies institutional knowledge signals, and proposes new nodes automatically.
 5. **Runs as an autonomous agent** with `filer agent` — an open-source, zero-dependency orchestrator that responds to git events, keeps the knowledge layer current, and posts to CI/CD pipelines.
@@ -54,14 +54,6 @@ filer scan --ci --fail-on high    # exits non-zero if any high/critical finding
 filer agent --event commit        # re-index changed files after push
 filer agent --event pr_merged --pr 142 --auto-apply  # mine review comments → new nodes
 filer agent --event scheduled     # nightly LLM staleness check
-```
-
-**Drop in for Repomix or Codebase Digest — no flag changes:**
-
-```bash
-repomix --output out.xml --style xml   →  filer pack --output out.xml --format xml
-repomix --remote user/repo             →  filer pack --remote user/repo
-codebase-digest --max-tokens 40000     →  filer pack --tokens 40000
 ```
 
 ---
@@ -128,12 +120,12 @@ Before writing any code, read filer.md in the repo root and follow the Filer loa
 ## Daily Usage
 
 ```bash
-# Pack for AI — replaces repomix and codebase-digest
+# Pack for AI
 filer pack                              # entire repo → stdout, knowledge-annotated
 filer pack --task "add webhook"         # LLM selects only relevant files
 filer pack --tokens 40000               # fit within token budget
 filer pack --remote user/repo           # pack a remote GitHub repo without cloning
-filer pack --format xml                 # repomix-compatible XML output
+filer pack --format xml                 # XML output
 
 # Knowledge layer
 filer layer                             # full build or rebuild
@@ -211,7 +203,7 @@ The git post-commit hook installed by `filer init` runs `filer layer --update --
 
 | Command | Description |
 |---------|-------------|
-| `filer pack [options]` | Pack codebase into AI-ready context — replaces repomix + codebase-digest, adds knowledge annotations |
+| `filer pack [options]` | Pack codebase into AI-ready context with knowledge annotations |
 
 `filer pack` options: `--scope <path>`, `--task <description>`, `--tokens <n>`, `--annotate summary\|full`, `--no-annotate`, `--compress`, `--format markdown\|xml\|json\|plain`, `--remote <url>`, `--branch <name>`, `--include <globs>`, `--ignore <globs>`, `--sort-by-changes`, `--include-git-log`, `--include-git-diff`, `--split <size>`, `--line-numbers`, `--top-files <n>`, `--stats`, `--output <file>`, `--copy`, `--no-gitignore`, `--no-instructions`
 
@@ -349,33 +341,7 @@ The review bundle lives at `.filer/review/pending.json`:
 
 ---
 
-## Replacing Repomix and Codebase Digest
-
-`filer pack` is a full drop-in replacement for both tools. Every flag you use today has an equivalent:
-
-| repomix / codebase-digest | filer pack |
-|---------------------------|------------|
-| `repomix` | `filer pack` |
-| `repomix --output out.xml --style xml` | `filer pack --output out.xml --format xml` |
-| `repomix --compress` | `filer pack --compress` |
-| `repomix --include "src/**"` | `filer pack --include "src/**"` |
-| `repomix --ignore "*.test.ts"` | `filer pack --ignore "*.test.ts"` |
-| `repomix --remote user/repo` | `filer pack --remote user/repo` |
-| `repomix --no-gitignore` | `filer pack --no-gitignore` |
-| `codebase-digest --max-tokens 40000` | `filer pack --tokens 40000` |
-| `codebase-digest --output-file ctx.md` | `filer pack --output ctx.md` |
-| *(not available)* | `filer pack --task "add payment webhook"` |
-| *(not available)* | knowledge annotations per file |
-| *(not available)* | stale node warnings in preamble |
-| *(not available)* | `filer_pack` MCP tool for agents |
-
-**Migration:** replace `repomix` or `codebase-digest` with `filer pack` in your scripts. Flags are compatible. The output gains knowledge annotations automatically if `.filer/` is initialized — use `--no-annotate` to get the same plain output as before.
-
----
-
 ## filer pack
-
-`filer pack` replaces repomix and codebase-digest — full feature parity plus four capabilities they don't have.
 
 ```bash
 filer pack                                     # pack entire repo → stdout
@@ -383,7 +349,7 @@ filer pack --output context.md                 # write to file
 filer pack --task "add payment webhook"        # smart: LLM selects relevant files only
 filer pack --tokens 40000                      # fit within token budget
 filer pack --compress                          # strip comments + empty lines (~70% smaller)
-filer pack --format xml                        # XML output (repomix compatible)
+filer pack --format xml                        # XML output
 filer pack --remote user/repo                  # pack a remote GitHub repo without cloning
 filer pack --scope src/payments/               # one module
 filer pack --annotate full                     # full knowledge annotations (default: summary)
@@ -392,8 +358,6 @@ filer pack --stats                             # token counts per file, no outpu
 filer pack --sort-by-changes --top-files 10    # most-changed files first
 filer pack --include-git-log --include-git-diff  # add commit history + current diff
 ```
-
-**What makes it 100x smarter than repomix:**
 
 Every file in the output gets its Filer knowledge nodes prepended inline — the agent sees constraints, dangers, and patterns attached to the code they govern, before reading a single line:
 
