@@ -1,0 +1,24 @@
+{
+  "name": "@filer/mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Filer — pack and scan repos from Claude Desktop, Cursor, and any MCP client",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "filer-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev":   "node --watch dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@filer/cli": "^1.3.0",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

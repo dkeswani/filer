@@ -1,6 +1,6 @@
 # openfiler.ai — Build Plan
 
-*v0.1 — 2026-04-23*
+*v0.2 — 2026-04-23*
 
 > Each phase ships to production before the next phase begins.
 > Every phase is independently deployable and adds real user value.
@@ -144,39 +144,58 @@ Changes to the existing Filer CLI repo:
 
 ---
 
-## Phase 2 — Pack (Tier 0)
-**Goal:** Core pack feature live. Tier 0 only (no `--task`). SSE streaming infrastructure established.
+## Phase 2 — Pack (Tier 0, core)
+**Goal:** Core pack feature live. Tier 0 only, synchronous JSON response. No SSE yet (deferred to Phase 4).
+**Status: COMPLETE** — `/api/pack` + `PackPanel` shipped and tested.
 
 ### Dependencies
-- Phase 1 complete
-- `@filer/cli/lib` exports `packFiles`, `formatOutput`, `compress`
+- Phase 1 complete ✓
+
+### Checklist (completed)
+- [x] `lib/pack-repo.ts` — runs filer CLI as child process (`process.execPath` + `dist/cli.js`); parses stats from header
+- [x] `app/api/pack/route.ts` — validate inputs, call `packRepo`, return JSON
+- [x] `components/PackPanel.tsx` — config panel:
+  - URL input
+  - Format selector (Markdown / XML / JSON / Plain)
+  - Compress toggle (strips whitespace + empty lines — combined, needs splitting in Phase 2b)
+  - Line numbers toggle
+  - Advanced (collapsed): scope, include glob, ignore glob
+  - Stats bar: file count + token count after run
+  - Download + Copy buttons
+  - CLI command preview
+- Note: SSE/streaming deferred to Phase 4; token budget deferred to Phase 7 (`--task`)
+
+**Exit criteria:** Pack works end-to-end. Download produces valid output in all four formats. ✓
+
+---
+
+## Phase 2b — Pack P1 completions (feature parity + differentiators)
+**Goal:** Close the gap with repomix web UI and expose filer's unique options. Must ship before public launch.
+
+### Dependencies
+- Phase 2 complete ✓
+- Verify filer CLI flags: `--no-file-summary`, `--no-directory-structure`, `--top-files-len` (add to CLI if missing)
 
 ### Checklist
-- [ ] `lib/job-runner.ts` — server job runner (clone → pipeline → stream)
-- [ ] `app/api/pack/route.ts`
-  - Validate inputs
-  - Clone repo
-  - Run `packFiles` + `formatOutput`
-  - Stream output via SSE (`SSEWriter`)
-  - Return `JobMeta` on complete (tokens, files, duration, cliCommand)
-- [ ] `app/(modes)/pack/page.tsx` — config panel:
-  - `SourceInput`
-  - Format selector (Markdown / XML / JSON)
-  - Compress toggles (off / comments only / full)
-  - Advanced section (collapsed): include/exclude, line numbers, git log, git diff
-  - Task toggle (visible but disabled — shows "Coming soon — BYOK" placeholder)
-- [ ] `components/OutputPanel.tsx` — streaming state:
-  - Progress bar during clone + scan
-  - Virtualised scroll for large outputs (react-virtual or similar)
-  - Token count + file count in header
-  - Download button (client-side Blob)
-  - Copy button with `✓ Copied` feedback
-  - `CliHandoff`
-- [ ] Handle large outputs gracefully (truncate preview at 50KB, full content in download)
-- [ ] Write integration test: known repo → expected token count range
-- [ ] Deploy + manually test
+- [ ] **Split compress** — replace single "compress" toggle with two separate toggles:
+  - "Remove comments" → `--remove-comments` flag (already in `PackOptions`)
+  - "Remove empty lines" → new flag; add to filer CLI if absent
+- [ ] **File summary toggle** — show/hide file summary section; maps to `--no-file-summary`
+- [ ] **Directory structure toggle** — show/hide dir tree; maps to `--no-directory-structure`
+- [ ] **Top N files** — numeric input (blank = all); maps to `--top-files-len N`
+- [ ] **Security check toggle** — default ON; when off sends `--no-security-check`; remove hardcoded `--no-security-check` from `pack-repo.ts`
+- [ ] **Zip upload** — file input in Pack panel → `multipart/form-data` → API writes to tmp → passes `--input <path>` instead of `--remote`; delete tmp in `finally`
+- [ ] **Char count** — add to stats bar alongside file count and token count; compute from `result.output.length`
+- [ ] **Git log / git diff toggles** — in advanced section; maps to `--git-log` / `--git-diff` (verify filer CLI flag names)
+- [ ] Update `buildCli()` in `PackPanel.tsx` to include all new flags
+- [ ] Update `PackOptions` type and `packRepo()` in `lib/pack-repo.ts` for new flags
+- [ ] Deploy + test each new option against a real repo
 
-**Exit criteria:** Pack streams correctly for repos of varied sizes. Download produces valid Markdown/XML/JSON.
+#### Platform P1 items (tracked here, implemented separately)
+- [ ] **MCP Server** — new `packages/mcp/` in filer repo; publish as `@filer/mcp`. Tools: `pack` (Tier 0), `secrets` (Tier 0). Config: `claude_desktop_config.json` snippet in README. No web UI change needed — this is a CLI/platform feature.
+- [ ] **Tree-sitter smart compression** — add `--smart-compress` flag to filer CLI using tree-sitter; expose as "Smart compress" toggle in PackPanel alongside existing toggles. Verify ~70% token reduction on a mid-sized repo before shipping.
+
+**Exit criteria:** All 10 P1 items from PRD §5b are done. Pack panel is at parity with repomix web UI. MCP server is published and testable from Claude Desktop.
 
 ---
 
@@ -184,7 +203,7 @@ Changes to the existing Filer CLI repo:
 **Goal:** Knowledge export live. Introduces `.filer/` detection and node rendering.
 
 ### Dependencies
-- Phase 2 complete (output panel patterns established)
+- Phase 2b complete (output panel patterns established)
 - `@filer/cli/lib` exports `readAllNodes`, `exportNodes`
 
 ### Checklist
@@ -215,14 +234,18 @@ Changes to the existing Filer CLI repo:
 
 ---
 
-## Phase 4 — Async Infrastructure
-**Goal:** Large-job queue working end-to-end. No user-facing mode yet — this is plumbing for Phase 5+.
+## Phase 4 — Async Infrastructure + SSE Streaming
+**Goal:** Large-job queue working end-to-end, plus SSE streaming for Pack. No new user-facing mode — this is plumbing for Phase 5+.
+Note: SSE for Pack was deferred from Phase 2 (sync JSON is sufficient for Tier 0 at current scale). Add streaming here so Phase 5/6/7 can reuse it.
 
 ### Dependencies
 - Phase 3 complete
 - Railway Postgres running
 
 ### Checklist
+- [ ] `lib/sse-writer.ts` — SSE stream abstraction (moved from Phase 2)
+- [ ] `components/OutputPanel.tsx` — streaming state machine: idle → running (progress bar) → streaming (virtualised scroll) → complete → error (moved from Phase 2)
+- [ ] Upgrade Pack output panel to consume SSE stream (replace current sync JSON display)
 - [ ] `lib/job-sizer.ts` — GitHub API size pre-flight
   - `GITHUB_PAT` env var set with correct scope
   - Returns `{ modules, sizeMb }` + fail-safe (route to async on error)

@@ -1,6 +1,6 @@
 # openfiler.ai — Product Requirements Document
 
-*v0.3 — 2026-04-23*
+*v0.4 — 2026-04-23*
 
 > Architecture detail: `openfiler-architecture.md`
 > UX design detail: `openfiler-ux.md`
@@ -100,7 +100,9 @@ Five modes. Each is a single config panel + output panel (no multi-step wizard �
 ### Mode 1 — Pack `FREE` + `BYOK`
 Pack a repo into AI-ready context. Tier 0 by default; Tier 1/2 when `--task` is enabled.
 
-**Inputs:** GitHub URL or zip upload, format (Markdown/XML/JSON), compress options, include/exclude patterns, token budget, git log/diff toggles, optional task description (triggers LLM).
+**Inputs (Tier 0):** GitHub URL or zip upload, format (Markdown/XML/JSON/Plain), remove-comments toggle, remove-empty-lines toggle, file-summary toggle, directory-structure toggle, top-N-files input, security-check toggle, line-numbers toggle, include/exclude globs, scope path.
+
+**Inputs (Tier 1/2, additional):** Task description (triggers LLM file selection), token budget (only visible when task is enabled), LLM key prompt.
 
 **Outputs:** Packed content stream, token count, file count, download, copy, CLI command.
 
@@ -131,6 +133,59 @@ Natural language question over `.filer/` nodes with LLM synthesis. Supports asyn
 **Inputs:** GitHub URL or zip (must have `.filer/`), LLM key, question text, optional type/scope filters.
 
 **Outputs:** Synthesised answer, supporting nodes cited, copy, CLI command.
+
+---
+
+## 5b. Priority 1 — Pack Mode: Feature Parity vs Repomix + Differentiators
+
+Repomix (repomix.com) is the closest competitor. The table below documents every option visible in their web UI, compared to filer's current Pack panel. Items marked **P1** must ship before public launch.
+
+| Feature | Repomix web | Filer web (current) | Action |
+|---------|-------------|---------------------|--------|
+| Repo URL input | ✓ | ✓ | — |
+| Zip file upload | ✓ | ✗ | **P1 — add zip upload to Pack panel and `/api/pack`** |
+| Output format: XML | ✓ | ✓ | — |
+| Output format: Markdown | ✓ | ✓ | — |
+| Output format: Plain text | ✓ | ✓ | — |
+| Output format: JSON | ✗ | ✓ | Filer advantage — keep |
+| Remove comments toggle | ✓ (separate) | ✗ (bundled in "compress") | **P1 — split compress into two toggles: "Remove comments" + "Remove empty lines"** |
+| Remove empty lines toggle | ✓ (separate) | ✗ (bundled) | **P1 — see above** |
+| Show file summary section | ✓ | ✗ | **P1 — add `--no-file-summary` / `--file-summary` toggle** |
+| Show directory structure section | ✓ | ✗ | **P1 — add directory structure toggle** |
+| Show line numbers | ✓ | ✓ | — |
+| Top N files (top-files-len) | ✓ | ✗ | **P1 — add numeric input, maps to `--top-files-len`** |
+| Include glob filter | ✓ | ✓ (advanced, collapsed) | Promote to always-visible or keep advanced — review UX |
+| Exclude glob filter | ✓ | ✓ (advanced, collapsed) | Same |
+| Security check toggle | ✓ | ✗ (always off via `--no-security-check`) | **P1 — expose toggle; default on** |
+| Private repo (GitHub token) | ✓ | ✗ | P2 — GitHub OAuth (already in Out of Scope v1.0; confirm deferral) |
+| Token count in output stats | ✓ | ✓ | — |
+| File count in output stats | ✓ | ✓ | — |
+| Character count in output stats | ✓ | ✗ | **P1 — add char count to result stats bar** |
+| Task-based file selection (`--task`) | ✗ | ✓ (BYOK, not wired yet) | Filer differentiator — P1 to wire up in UI |
+| Scope path filter | ✗ | ✓ (advanced, collapsed) | Filer advantage — keep |
+| Knowledge annotation export | ✗ | ✓ (filer-specific) | Filer advantage — surface in UI copy |
+| **MCP Server** | ✓ (users call repomix from Claude Desktop) | ✗ | **P1 — publish `@filer/mcp` server** |
+| **Tree-sitter compression** | ✓ (~70% token reduction, AST-aware) | ✗ (whitespace only, ~10-20%) | **P1 — add to filer CLI, expose in web UI as "Smart compress"** |
+| GitHub Actions | ✓ (published action) | ✗ (CLI works in CI but no action) | P2 — add `filer/pack-action` after launch |
+| Library API | ✓ | ✓ (`@filer/cli/lib`) | — |
+| Custom instructions | ✓ | ✓ (`--instructions` / `filer.md`) | Filer goes further (knowledge layer) |
+| Best practices docs | ✓ | ✗ | P2 — add after launch |
+
+### P1 implementation checklist for Pack mode
+
+#### Form features (web UI)
+1. **Zip upload** — file input → `multipart/form-data` → API writes to tmp, passes `--input <path>` to filer CLI instead of `--remote`
+2. **Split compress** — ✅ done: "Remove comments" + "Remove empty lines" toggles
+3. **File summary toggle** — ✅ done
+4. **Directory structure toggle** — ✅ done
+5. **Top N files** — ✅ done
+6. **Security check toggle** — ✅ done
+7. **Char count** — ✅ done
+8. **`--task` wiring** — add collapsed "AI selection" section (BYOK only): text input for task → enables LLM key entry → sends `--task` to filer CLI
+
+#### Platform features (CLI + web)
+9. **MCP Server (`@filer/mcp`)** — publish a Model Context Protocol server so users can call `filer pack`, `filer secrets`, and `filer query` directly from Claude Desktop, Cursor, and any MCP-compatible client without leaving the IDE. Scope: `pack` and `secrets` tools in v1 (Tier 0, no LLM needed); `query` and `scan` tools as BYOK in v1.1.
+10. **Tree-sitter smart compression** — integrate tree-sitter to strip comments and dead whitespace at the AST level rather than with regex. Target: ~70% token reduction (matching repomix). Expose in web UI as a third compression mode: `Smart compress` alongside "Remove comments" and "Remove empty lines". Maps to new `--smart-compress` flag in filer CLI.
 
 ---
 

@@ -10,6 +10,7 @@ export interface FormatOptions {
   instructions?:   string;    // from filer.md or --instructions
   headerText?:     string;
   showLineNumbers?: boolean;
+  showFileSummary?: boolean;  // default true; false omits top-files section
   repoName:        string;
   generatedAt:     string;
   totalTokens:     number;
@@ -53,7 +54,7 @@ function formatMarkdown(opts: FormatOptions): string {
     parts.push('## Repository Structure', '', '```', opts.tree, '```', '');
   }
 
-  if (opts.topFilesLen && opts.topFilesLen > 0) {
+  if (opts.showFileSummary !== false && opts.topFilesLen && opts.topFilesLen > 0) {
     parts.push('## Largest Files', '');
     const top = [...opts.files]
       .sort((a, b) => b.tokens - a.tokens)
@@ -89,13 +90,15 @@ function formatXml(opts: FormatOptions): string {
   parts.push('<?xml version="1.0" encoding="UTF-8"?>');
   parts.push('<filer_pack>');
 
-  parts.push('<file_summary>');
-  parts.push(`  <repo>${esc(opts.repoName)}</repo>`);
-  parts.push(`  <generated_at>${opts.generatedAt}</generated_at>`);
-  parts.push(`  <total_files>${opts.totalFiles}</total_files>`);
-  parts.push(`  <total_tokens>${opts.totalTokens}</total_tokens>`);
-  if (opts.headerText) parts.push(`  <header>${esc(opts.headerText)}</header>`);
-  parts.push('</file_summary>');
+  if (opts.showFileSummary !== false) {
+    parts.push('<file_summary>');
+    parts.push(`  <repo>${esc(opts.repoName)}</repo>`);
+    parts.push(`  <generated_at>${opts.generatedAt}</generated_at>`);
+    parts.push(`  <total_files>${opts.totalFiles}</total_files>`);
+    parts.push(`  <total_tokens>${opts.totalTokens}</total_tokens>`);
+    if (opts.headerText) parts.push(`  <header>${esc(opts.headerText)}</header>`);
+    parts.push('</file_summary>');
+  }
 
   if (opts.instructions) {
     parts.push('<instructions>');

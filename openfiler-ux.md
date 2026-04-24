@@ -1,6 +1,6 @@
 # openfiler.ai — UX Design
 
-*v0.1 — 2026-04-23*
+*v0.2 — 2026-04-23*
 
 ---
 
@@ -19,17 +19,21 @@ Three principles drive every decision:
 ### Palette
 
 ```
-Background:     #0d1117   (GitHub dark — familiar to developers)
-Surface:        #161b22   (cards, panels)
-Border:         #30363d   (subtle separators)
-Text primary:   #e6edf3
-Text secondary: #8b949e
-Accent:         #58a6ff   (blue — links, active states, CTAs)
-Success:        #3fb950   (green)
-Warning:        #d29922   (amber)
-Danger:         #f85149   (red)
-Critical:       #f85149   (same as danger — maps to Filer CLI CRITICAL)
+Background:     #09090b   (near-black — original, not GitHub dark)
+Surface:        #111113   (config panel, header)
+Border:         rgba(255,255,255,0.06)  (subtle separators)
+Text primary:   #e4e4e7
+Text secondary: #71717a
+Text muted:     #52525b
+Accent:         #6366f1   (indigo — active states, CTAs, badges)
+Accent light:   #a5b4fc   (indigo text on dark backgrounds)
+Success:        #4ade80   (green)
+Warning:        #fbbf24   (amber)
+Danger:         #f87171   (red)
+Critical:       #f87171   (same as danger — maps to Filer CLI CRITICAL)
 ```
+
+> **Why indigo, not blue:** openfiler is not GitHub. Indigo (`#6366f1`) reads as AI/developer tooling and differentiates from GitHub's `#58a6ff`. Confirmed in implementation.
 
 ### Typography
 
@@ -48,9 +52,9 @@ Minimal. Lucide icons only — outline style, 16px in UI, 20px in headings. No e
 Small pill labels, shown next to mode tab names:
 
 ```
-FREE    → green pill    #3fb950 background, dark text
-BYOK    → blue pill     #58a6ff background, dark text
-HOSTED  → purple pill   #a371f7 background, dark text
+FREE    → green pill    rgba(34,197,94,0.12)  text: #4ade80
+BYOK    → indigo pill   rgba(99,102,241,0.18) text: #818cf8
+HOSTED  → purple pill   rgba(163,113,247,0.18) text: #c084fc
 ```
 
 ---
@@ -61,7 +65,7 @@ HOSTED  → purple pill   #a371f7 background, dark text
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  HEADER  (48px fixed)                                               │
+│  HEADER  (52px fixed)                                               │
 │  ○ openfiler.ai    [Pack·FREE] [Secrets·FREE] [Scan·BYOK]          │
 │                    [Export·FREE] [Query·BYOK]      [Sign in]        │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -70,7 +74,7 @@ HOSTED  → purple pill   #a371f7 background, dark text
 │                                                                     │
 │  ┌──────────────────────┐  ┌────────────────────────────────────┐  │
 │  │  CONFIG PANEL        │  │  OUTPUT PANEL                      │  │
-│  │  (400px, fixed)      │  │  (fills remaining width)           │  │
+│  │  (340px, fixed)      │  │  (fills remaining width)           │  │
 │  │                      │  │                                    │  │
 │  │                      │  │                                    │  │
 │  └──────────────────────┘  └────────────────────────────────────┘  │
@@ -81,19 +85,25 @@ HOSTED  → purple pill   #a371f7 background, dark text
 - Header is always visible — mode switching never requires scrolling up
 - Config panel is fixed width, scrolls independently if content overflows
 - Output panel fills remaining width, virtualised scroll for large outputs
-- On mobile (< 768px): config panel stacks above output panel, full width
+- Desktop-first — not optimised for mobile. Config panel is 340px fixed; output fills remainder.
 
 ### 3.2 Header
 
+Single 52px bar — logo, tabs, and CTA all on one line. No second row.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  ◈ openfiler.ai                                          [Sign in]  │
-│  ─────────────────────────────────────────────────────────────────  │
-│  [Pack FREE] [Secrets FREE] [Scan BYOK] [Export FREE] [Query BYOK]  │
+│  ◈ openfiler  │  [Pack FREE] [Secrets FREE] [Scan BYOK]            │
+│               │  [Export FREE] [Query BYOK]    npx @filer/cli@latest│
 └─────────────────────────────────────────────────────────────────────┘
+  52px fixed
 ```
 
-Active mode tab has a bottom border accent (`#58a6ff`). Tabs are plain text + tier badge — no icons cluttering the nav.
+- Logo + wordmark separated from tabs by a faint vertical rule
+- Active tab: `rgba(99,102,241,0.14)` background, `#e4e4e7` text
+- Inactive tab: transparent background, `#71717a` text, hover `#a1a1aa`
+- `npx @filer/cli@latest` is a monospace pill link, right-aligned, links to GitHub
+- No `Sign in` until Phase 8 (Hosted tier)
 
 ---
 
@@ -162,34 +172,59 @@ Appears inline in the config panel, only when the user enables an LLM feature. N
 
 ```
 ┌──────────────────────────────────────────┐
-│  Repository                              │
-│  [ github.com/owner/repo          ]  ✓  │
-│  Branch  [main ▼]                        │
+│  Pack codebase                           │
+│  Pack any repo into AI-ready context.    │
 │                                          │
-│  ── Output ──────────────────────────── │
-│  Format   ● Markdown  ○ XML  ○ JSON     │
-│  Compress ○ Off  ● Comments  ○ Full     │
+│  Repository URL                          │
+│  [ https://github.com/owner/repo  ]      │
+│  ── or ──                                │
+│  [ Upload zip ]  (max 10MB)              │
 │                                          │
-│  ── Smart selection (LLM) ─────────────  │
-│  ☐  Select files by task                │
-│     [ What are you building?      ]      │
-│     Token budget  [40000         ]       │
-│     [LLM key prompt — see §4.3]          │
+│  Output format                           │
+│  [Markdown] [XML] [JSON] [Plain]         │
+│  (pill toggle — one active at a time)    │
 │                                          │
-│  ── Advanced ▼ (collapsed) ─────────── │
-│     Include  [ **/*              ]       │
-│     Ignore   [ node_modules/**   ]       │
-│     ☐ Line numbers                      │
+│  ○ Remove comments                       │
+│  ○ Remove empty lines                    │
+│  ○ Line numbers                          │
+│  ○ Show file summary       (default on)  │
+│  ○ Show directory structure (default on) │
+│  ○ Security check           (default on) │
+│                                          │
+│  Top N files  [ _______ ]  (blank=all)   │
+│                                          │
+│  ── Advanced filters ▼ (collapsed) ────  │
+│     Scope    [ src/              ]       │
+│     Include  [ **/*.ts           ]       │
+│     Ignore   [ **/*.test.ts      ]       │
 │     ☐ Include git log                   │
 │     ☐ Include current diff              │
 │                                          │
-│  [  Run  ]                               │
+│  ── AI file selection ▼ (collapsed) ───  │
+│     ☐  Select files by task  BYOK       │
+│        [ What are you building?   ]      │
+│        Token budget  [ 40000      ]      │
+│        [LLM key prompt — §4.3]           │
+│                                          │
+│  [  Pack repository  ]                   │
+│                                          │
+│  CLI                                     │
+│  filer pack --remote <url> \             │
+│    --format markdown                     │
+│  (live preview, updates as options set)  │
+│                                          │
+│  10 packs / IP / hr                      │
 └──────────────────────────────────────────┘
 ```
 
-- Advanced section is collapsed by default — most users never need it
-- "Select files by task" toggle reveals the task input + token budget + LLM prompt
-- Token budget field only appears when task toggle is on
+- Format selector: 4 pill buttons, one active (indigo) at a time
+- Toggles are standard toggle switches, not checkboxes
+- File summary + directory structure + security check default ON; user can turn off
+- Top N files: small numeric input, right of label, blank means all files
+- Advanced filters collapsed by default; AI selection collapsed by default
+- AI selection section shows BYOK badge; task toggle reveals task input + token budget + LLM prompt
+- CLI preview block shows the exact `filer pack` command, updates live as options change
+- Config panel width: 340px fixed
 
 #### Output panel (idle)
 
@@ -219,7 +254,7 @@ Appears inline in the config panel, only when the user enables an LLM feature. N
 
 ```
 ┌────────────────────────────────────────────────────┐
-│  ✓  47 files  ·  ~12,400 tokens  ·  0.3s          │
+│  ✓  47 files  ·  ~12,400 tokens  ·  49,200 chars  │
 │  ──────────────────────────────────────────────    │
 │  [Download .md]  [Copy]                            │
 │                                                    │
@@ -611,13 +646,13 @@ The first command is the exact equivalent of what just ran on the web. The secon
 
 ## 9. Responsive Behaviour
 
+Desktop-first. The primary audience is developers on laptops and desktops. Mobile is not a design target for v1.
+
 | Breakpoint | Layout |
 |------------|--------|
-| ≥ 1024px | Side-by-side config + output panels (standard) |
-| 768–1023px | Config panel full width, output below (stacked) |
-| < 768px | Single column, output collapses to summary only |
-
-On mobile, the output preview is truncated to a summary card (token count, finding count, download button). Full output is available via download only — rendering 10,000 lines of code on a phone is not useful.
+| ≥ 1024px | Side-by-side 340px config + fluid output (standard) |
+| 768–1023px | Config panel full width, output below (degraded but usable) |
+| < 768px | Not supported — shows a "best viewed on desktop" notice |
 
 ---
 

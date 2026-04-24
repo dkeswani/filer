@@ -11,6 +11,7 @@ import { formatOutput, type OutputFormat } from '../pack/formatter.js';
 import { selectRelevantFiles, applyTokenBudget } from '../pack/selector.js';
 import { buildTree, renderTree }      from '../pack/tree.js';
 import { cloneRemote }                from '../pack/remote.js';
+import { smartCompress }              from '../pack/smart-compress.js';
 import { readConfig, filerExists }    from '../store/mod.js';
 import { LLMGateway }                 from '../llm/mod.js';
 import { scanForSecrets, formatSecretWarnings } from '../security/secretlint.js';
@@ -46,7 +47,11 @@ export interface PackOptions {
   copy?:              boolean;
   stdout?:            boolean;
   quiet?:             boolean;
-  noSecurityCheck?:   boolean;  // --no-security-check: skip secretlint scan
+  root?:                 string;   // --root: pack a local directory instead of cwd
+  smartCompress?:        boolean;  // --smart-compress: AST-aware comment stripping via tree-sitter
+  securityCheck?:        boolean;  // --no-security-check → false; default true
+  fileSummary?:          boolean;  // --no-file-summary → false; default true
+  directoryStructure?:   boolean;  // --no-directory-structure → false; default true
 }
 
 export async function packCommand(options: PackOptions): Promise<void> {
@@ -58,7 +63,7 @@ export async function packCommand(options: PackOptions): Promise<void> {
 
   // ── Remote repo ───────────────────────────────────────────────────────────
   let remoteClone: { root: string; cleanup: () => void } | null = null;
-  let root = process.cwd();
+  let root = options.root ? path.resolve(options.root) : process.cwd();
 
   if (options.remote) {
     const spinner = isTTY ? ora('  Cloning remote repo...').start() : null;
@@ -118,7 +123,7 @@ async function run(
   }
 
   // ── Secret scan (pre-LLM safety check) ───────────────────────────────────
-  if (!options.noSecurityCheck) {
+  if (options.securityCheck !== false) {
     const secSpinner = isTTY ? ora('  Scanning for secrets...').start() : null;
     try {
       const { findings } = await scanForSecrets(
@@ -163,6 +168,21 @@ async function run(
       tokens: estimateTokens(f.content),
     }));
     log(chalk.dim('  Compression applied'));
+  }
+
+  // ── Smart compress (tree-sitter AST-aware) ───────────────────────────────
+  if (options.smartCompress) {
+    const scSpinner = isTTY ? ora('  Smart compressing (tree-sitter)...').start() : null;
+    let totalBefore = 0, totalAfter = 0;
+    const compressed = await Promise.all(files.map(async f => {
+      const result = await smartCompress(f.path, f.content);
+      totalBefore += result.originalBytes;
+      totalAfter  += result.compressedBytes;
+      return { ...f, content: result.content, tokens: estimateTokens(result.content) };
+    }));
+    files = compressed;
+    const pct = totalBefore > 0 ? Math.round((1 - totalAfter / totalBefore) * 100) : 0;
+    scSpinner?.succeed(`  Smart compression: ${pct}% size reduction`);
   }
 
   // ── Annotate with knowledge nodes ─────────────────────────────────────────
@@ -238,16 +258,17 @@ async function run(
   const output = formatOutput({
     format,
     files,
-    tree,
+    tree:            options.directoryStructure === false ? undefined : tree,
     preamble,
     instructions,
     headerText,
     showLineNumbers: options.lineNumbers,
+    showFileSummary: options.fileSummary !== false,
     repoName,
     generatedAt:  new Date().toISOString().slice(0, 19).replace('T', ' '),
     totalTokens,
     totalFiles:   files.length,
-    topFilesLen:  topFiles,
+    topFilesLen:  options.fileSummary === false ? 0 : topFiles,
   });
 
   // ── Split output ──────────────────────────────────────────────────────────
