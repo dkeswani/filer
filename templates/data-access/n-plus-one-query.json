@@ -1,0 +1,22 @@
+{
+  "id": "antipattern:n-plus-one-query",
+  "type": "antipattern",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js", "**/*.py"],
+  "tags": ["database", "performance", "orm"],
+  "confidence": 0.85,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Looping over a parent collection and issuing one child query per parent.",
+  "why_it_looks_right": "The code reads naturally: 'for each user, get their posts.' Tests pass on small datasets. The ORM hides the SQL. Performance is fine in development with 5 records.",
+  "why_its_wrong_here": "Production has 5,000 records. The endpoint now issues 5,001 queries per request. Latency goes from 50ms to 12 seconds. The first sign is a customer support ticket; the second is the database connection pool exhausting.",
+  "correct_pattern": "Use the ORM's eager-loading primitive: `.include()`, `.preload()`, `.with()`, `.populate()`, or an explicit JOIN. For Prisma, `include: { posts: true }`. For Active Record, `User.includes(:posts)`. For raw SQL, a JOIN or a `WHERE id = ANY($1)` batch fetch followed by client-side grouping. Modern ORMs also support DataLoader-style request-scoped batching for nested resolvers.",
+  "seen_in": "GraphQL resolvers that fetch nested types one at a time. List endpoints that hydrate each result with related data. Report queries that aggregate per-row.",
+  "history": "Often introduced when a single-record code path is reused inside a loop without examination. The fix is mechanical once spotted; the harm is in how long it goes unspotted."
+}

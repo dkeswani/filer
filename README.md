@@ -78,6 +78,22 @@ When the wizard finishes, your repo has a committed `.filer/` directory, a `file
 
 ---
 
+## Bundled templates
+
+`@filer/cli` ships with a curated library of starter templates covering security, migrations, error handling, data access, and API patterns. Install them when you initialize a new project:
+
+```bash
+npx @filer/cli init --templates security,migrations
+```
+
+Available categories: `security`, `migrations`, `error-handling`, `data-access`, `api`, `meta`. Use `all` to install everything except `meta`.
+
+Templates ship as starting points — every template is `verified: false` with a generic `scope`. Adapt them to your codebase, then run `filer verify <id>` to mark them trusted.
+
+Browse the source: [`templates/`](./templates).
+
+---
+
 ## What Gets Created
 
 ```

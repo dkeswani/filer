@@ -1,0 +1,21 @@
+{
+  "id": "pattern:repository-layer-for-data-access",
+  "type": "pattern",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js", "**/*.py", "**/*.go"],
+  "tags": ["architecture", "patterns", "data-access"],
+  "confidence": 0.82,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Database access is encapsulated behind repository (or DAO) functions, one per logical entity, exposing intention-revealing operations rather than raw queries.",
+  "structure": "`UserRepository.findByEmail(email)`, `UserRepository.deactivate(userId)`. Repositories return domain objects, not raw rows. They do not contain business rules — those live in services. They are the only layer that knows the schema.",
+  "why": "Schema changes touch one file instead of many. The query catalog is discoverable: `grep` the repository to find every way users are fetched. Mocking is trivial in service tests. Caching, instrumentation, and read/write splitting attach at the repository boundary instead of being scattered.",
+  "anti_pattern": "Inline queries in handlers (see antipattern:direct-db-from-handler). Repository methods that return ORM query builders instead of finalized results — leaks the abstraction.",
+  "deviations": []
+}

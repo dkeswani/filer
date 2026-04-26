@@ -1,0 +1,23 @@
+{
+  "id": "danger:column-narrowing-migration",
+  "type": "danger",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/migrations/**", "**/db/migrations/**", "**/prisma/migrations/**"],
+  "tags": ["database", "migration", "data-loss"],
+  "confidence": 0.92,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Narrowing a column type (TEXT → VARCHAR(100), BIGINT → INT, NUMERIC → INTEGER) silently truncates or fails on existing rows that exceed the new bound.",
+  "condition": "The migration runs against a database with existing rows that violate the new constraint. Behavior depends on the database engine: some truncate (MySQL with default settings), some fail mid-migration leaving the table in a partial state, some succeed but corrupt subsequent reads.",
+  "frequency": "Whenever schema authors guess at column sizes without checking the actual data distribution.",
+  "current_mitigation": "Manual query of MAX(LENGTH(column)) before authoring the migration.",
+  "not_fixed_because": "The check is easy to skip when the migration is mechanical.",
+  "safe_pattern": "Before narrowing: run `SELECT MAX(LENGTH(column)), MAX(column), MIN(column) FROM table` against production (or a recent production snapshot). If any value exceeds the proposed new bound, either pick a wider type, or split into a backfill-then-narrow migration that explicitly handles the out-of-bound rows (truncation, rejection, archival). Add a CHECK constraint as part of the same migration to prevent future violations.",
+  "history": "Common incident: NUMERIC(10,2) → NUMERIC(8,2) on a financial column. The migration succeeded because no historical row exceeded the bound, but a subsequent business event (a single large transaction) caused a runtime error that took down the payment write path for 40 minutes."
+}

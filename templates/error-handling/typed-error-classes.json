@@ -1,0 +1,21 @@
+{
+  "id": "pattern:typed-error-classes",
+  "type": "pattern",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js", "**/*.py"],
+  "tags": ["error-handling", "patterns"],
+  "confidence": 0.82,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Application-thrown errors should be instances of typed error classes that extend a base `AppError`, not raw `Error` or string throws.",
+  "structure": "AppError (base) → NotFoundError, ValidationError, AuthorizationError, ConflictError, etc. Each type carries a stable error code and a serializable shape suitable for the API response layer. The base class handles serialization once; subclasses add fields specific to their kind.",
+  "why": "Centralizes API error formatting in one place (the error-to-response middleware). Makes error handling discriminable in catch blocks (instanceof checks instead of string-matching error messages). Makes errors testable — you can assert on the type, not the wording. Decouples internal error semantics from external API contract.",
+  "anti_pattern": "Throwing strings, throwing plain Error with message-based discrimination, or returning a `{ ok: false, error: '...' }` shape from internal functions and converting at every boundary.",
+  "deviations": []
+}

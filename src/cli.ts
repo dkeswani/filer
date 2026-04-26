@@ -45,7 +45,8 @@ program
   .option('--model <model>',       'LLM model (defaults to provider recommendation)')
   .option('--no-hook',             'Skip git post-commit hook installation')
   .option('--force',               'Reinitialize even if .filer/ already exists')
-  .action((options) => initCommand(options));
+  .option('--templates <categories>', 'Install bundled templates: security,migrations,error-handling,data-access,api,meta,all')
+  .action((options) => initCommand(options).catch(err));
 
 program
   .command('stats')

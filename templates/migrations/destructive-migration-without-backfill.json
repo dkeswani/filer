@@ -1,0 +1,23 @@
+{
+  "id": "danger:destructive-migration-without-backfill",
+  "type": "danger",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/migrations/**", "**/db/migrations/**", "**/prisma/migrations/**"],
+  "tags": ["database", "migration", "data-loss"],
+  "confidence": 0.92,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "DROP TABLE, DROP COLUMN, and TRUNCATE in a migration without a preceding backfill or backup step destroy production data irreversibly.",
+  "condition": "The migration runs against a production database. The dropped table or column contains data that any system, query, or report still depends on — including systems the migration author may not know about (analytics, downstream replicas, archival jobs).",
+  "frequency": "Common during refactors and 'cleanup' PRs.",
+  "current_mitigation": "Code review by a database-aware engineer.",
+  "not_fixed_because": "The temptation to consolidate changes into one PR is strong. Splitting into two deploys (deprecate-then-drop) requires planning and discipline.",
+  "safe_pattern": "Two-deploy pattern: (1) stop writing to the column/table and update all reads to use the new location; deploy and verify in production for at least one full release cycle. (2) Drop the column/table in a follow-up migration after confirming no system has read or written it during the soak period. For columns, add an `is_deprecated` comment and check telemetry before dropping. Never combine the rename and the drop in the same PR.",
+  "history": "Prior incidents in similar codebases include: dropping a column still referenced by a nightly batch job that ran weekly (data loss discovered 7 days after deploy); dropping a table after replicating to a new schema, where the replica had a silent lag and lost the last 4 hours of writes."
+}

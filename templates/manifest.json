@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "categories": {
+    "security": {
+      "label": "Security",
+      "description": "Hardcoded secrets, injection, PII exposure, authorization gaps.",
+      "templates": [
+        "security/never-log-secrets",
+        "security/no-hardcoded-credentials",
+        "security/no-pii-in-logs",
+        "security/parameterize-sql-queries",
+        "security/validate-api-inputs",
+        "security/authorize-before-fetch"
+      ]
+    },
+    "migrations": {
+      "label": "Migrations & data safety",
+      "description": "Destructive migrations, column narrowing, idempotency, rate limits.",
+      "templates": [
+        "migrations/destructive-migration-without-backfill",
+        "migrations/column-narrowing-migration",
+        "migrations/idempotency-required-on-payment-mutations",
+        "migrations/rate-limit-required-on-public-endpoints"
+      ]
+    },
+    "error-handling": {
+      "label": "Error handling",
+      "description": "Swallowed errors, typed error classes.",
+      "templates": [
+        "error-handling/catch-and-swallow-errors",
+        "error-handling/typed-error-classes"
+      ]
+    },
+    "data-access": {
+      "label": "Data access",
+      "description": "N+1 queries, direct DB access, repository pattern, sync I/O.",
+      "templates": [
+        "data-access/n-plus-one-query",
+        "data-access/direct-db-from-handler",
+        "data-access/repository-layer-for-data-access",
+        "data-access/no-sync-fs-in-handlers"
+      ]
+    },
+    "api": {
+      "label": "API conventions",
+      "description": "Controller hygiene, secrets in source, ID stability.",
+      "templates": [
+        "api/no-business-logic-in-controllers",
+        "api/no-secrets-in-source",
+        "api/user-id-format-stable"
+      ]
+    },
+    "meta": {
+      "label": "Meta",
+      "description": "Self-describing template that explains the template pack itself.",
+      "templates": [
+        "meta/why-this-template-pack-exists"
+      ]
+    }
+  }
+}
