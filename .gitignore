@@ -5,6 +5,7 @@ dist/
 .DS_Store
 *.tgz
 roadmap.md
+!/ROADMAP.md
 HANDOFF-*.md
 
 # Dogfooded .filer/ — not committed; regenerated locally
