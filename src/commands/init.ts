@@ -26,11 +26,34 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   console.log(chalk.bold('\n  filer — the knowledge layer for codebases\n'));
 
-  // Guard against re-init
+  // Bug 1 fix: validate --templates before any file I/O
+  if (options.templates) {
+    try {
+      const { resolveCategories } = await import('../templates/loader.js');
+      const categories = options.templates.split(',').map(c => c.trim()).filter(Boolean);
+      resolveCategories(categories); // throws on unknown category
+    } catch (e: any) {
+      console.error(chalk.red(`  Template error: ${e.message}`));
+      process.exit(1);
+    }
+  }
+
+  // Bug 3 fix: --templates on existing .filer/ → add-templates-only mode
+  if (filerExists(root) && options.templates && !options.force) {
+    try {
+      await installTemplates(root, options.templates);
+    } catch (e: any) {
+      console.error(chalk.red(`  Template install error: ${e.message}`));
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Bug 2 fix: exit non-zero on the "already exists" guard
   if (filerExists(root) && !options.force) {
     console.log(chalk.yellow('  .filer/ already exists in this directory.'));
     console.log(chalk.dim('  Run with --force to reinitialize.\n'));
-    return;
+    process.exit(1);
   }
 
   const provider = (options.provider ?? 'anthropic') as FilerConfig['llm']['provider'];
