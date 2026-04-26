@@ -6,3 +6,6 @@ dist/
 *.tgz
 roadmap.md
 HANDOFF-*.md
+
+# Dogfooded .filer/ — not committed; regenerated locally
+.filer/
