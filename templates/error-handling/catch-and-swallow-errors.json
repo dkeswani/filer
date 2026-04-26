@@ -1,0 +1,22 @@
+{
+  "id": "antipattern:catch-and-swallow-errors",
+  "type": "antipattern",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js", "**/*.py"],
+  "tags": ["error-handling", "observability"],
+  "confidence": 0.85,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Catching an error and continuing without logging, re-throwing, or surfacing it.",
+  "why_it_looks_right": "It feels defensive. The code 'handles' the error. The function returns a value instead of crashing. Tests pass. Reviewers assume the empty catch block is a deliberate, considered choice.",
+  "why_its_wrong_here": "Swallowed errors are the single biggest reason production bugs go undiagnosed. The error happened, the system silently recovered into an inconsistent state, and the only signal is downstream weirdness that the on-call engineer cannot trace back to its source. The 'handling' is actually deferral — the bug surfaces somewhere else, with no stack trace, hours later.",
+  "correct_pattern": "Catch errors only when you can do one of: (1) log them with full context and continue (only acceptable for explicitly recoverable, expected errors — e.g. cache miss falling back to source); (2) translate them into a domain-specific error type and re-throw; (3) propagate them by not catching at all. An empty catch block, or a catch block with only a console.log of the error message (no stack, no context), is almost always a bug.",
+  "seen_in": "Common in retry loops where the author wanted to suppress 'expected' failures, in JSON.parse calls where the author defaulted to {}, and in event handlers where errors don't propagate naturally.",
+  "history": "Often introduced by autocomplete: the IDE suggests `} catch (e) { console.log(e); }` and the author moves on."
+}

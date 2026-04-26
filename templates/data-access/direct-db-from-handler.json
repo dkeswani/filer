@@ -1,0 +1,22 @@
+{
+  "id": "antipattern:direct-db-from-handler",
+  "type": "antipattern",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/routes/**", "**/api/**", "**/handlers/**", "**/controllers/**"],
+  "tags": ["architecture", "layering", "testability"],
+  "confidence": 0.83,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Querying the database directly from an HTTP handler, controller, or route function.",
+  "why_it_looks_right": "It is the shortest path. The handler has access to the DB client. Adding a service or repository feels like ceremony. For trivial CRUD, the indirection genuinely adds nothing.",
+  "why_its_wrong_here": "Even trivial CRUD acquires non-trivial behavior over time: authorization checks, audit logging, cache invalidation, validation. When the DB call is in the handler, every one of these gets sprinkled in next to it, and the handler grows into an untested, untestable, transaction-spanning blob. Testing requires spinning up a database. Reusing the same fetch logic from a background job requires duplication.",
+  "correct_pattern": "Handler validates the request, calls a service function, formats the response. Service function applies business rules and calls one or more repository functions. Repository functions own the SQL. Each layer is testable in isolation: handlers with HTTP fixtures, services with mocked repositories, repositories with a test database.",
+  "seen_in": "Express handlers with inline `db.query()`. Next.js API routes with direct Prisma calls. Rails controllers with ActiveRecord scopes. The pattern repeats across frameworks.",
+  "history": "Always begins as 'we'll add the service layer when we need it.' Need is identified retroactively, after the handler has accumulated enough behavior that extracting it is risky."
+}

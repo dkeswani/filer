@@ -1,0 +1,23 @@
+{
+  "id": "danger:idempotency-required-on-payment-mutations",
+  "type": "danger",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/payments/**", "**/billing/**", "**/checkout/**", "**/orders/**"],
+  "tags": ["payments", "idempotency", "race-condition"],
+  "confidence": 0.92,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Any mutation that creates a charge, refund, or payout — or that triggers a downstream system to do so — must be idempotent on retry.",
+  "condition": "The client retries the request (network timeout, SDK auto-retry, user double-click). Without idempotency, retries become duplicate charges. The client's view of 'success' may differ from the server's, especially if the response is lost in transit after the mutation committed.",
+  "frequency": "Every payment integration encounters this. Retries are not optional in distributed systems.",
+  "current_mitigation": "Hope.",
+  "not_fixed_because": "Idempotency requires upfront design — adding it after launch usually requires a schema change and a client-side change in lockstep.",
+  "safe_pattern": "The client generates an idempotency key (UUID v4) per logical operation and includes it in the request. The server stores `(idempotency_key, response)` in a table with a unique constraint on the key. On duplicate key, return the stored response instead of re-executing. Stripe, Square, and Adyen all expose this pattern via an `Idempotency-Key` header. For internal mutations, mirror the pattern.",
+  "history": "Common incident: a webhook handler that issued refunds without idempotency. The provider retried the webhook on a 5xx response. The handler had committed the refund but failed to ack the webhook in time. Customer received the refund three times before the on-call engineer disabled the handler."
+}

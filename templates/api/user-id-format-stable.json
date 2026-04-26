@@ -1,0 +1,25 @@
+{
+  "id": "assumption:user-id-format-stable",
+  "type": "assumption",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js"],
+  "tags": ["assumption", "data-model"],
+  "confidence": 0.78,
+  "verified": false,
+  "stale_risk": 0.3,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "User IDs entering this system are UUID v4 strings (36 chars, hyphenated lowercase hex).",
+  "relied_on_by": [
+    "Database queries (PRIMARY KEY type)",
+    "Cache key construction",
+    "Log correlation",
+    "Foreign keys in related tables"
+  ],
+  "breaks_when": "An integration introduces a user identifier that is not a UUID v4 — e.g. an enterprise SSO provider that supplies email-as-ID, an imported account batch with integer IDs, or a partner integration using their own ID format.",
+  "boundary": "Convert at the integration boundary: if an external system provides a non-UUID identifier, mint a new internal UUID for that user and store the external ID separately. Never propagate non-UUID identifiers into the internal user-ID slot."
+}

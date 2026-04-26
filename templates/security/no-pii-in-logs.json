@@ -1,0 +1,32 @@
+{
+  "id": "security:no-pii-in-logs",
+  "type": "security",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/*.ts", "**/*.js", "**/*.py", "**/*.go", "**/*.rb"],
+  "tags": ["security", "privacy", "logging", "compliance"],
+  "confidence": 0.92,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "severity": "high",
+  "category": "data-exposure",
+  "statement": "Do not log personally identifiable information: emails, phone numbers, full names, addresses, government IDs, payment details, or biometric data.",
+  "because": "GDPR Article 32, CCPA, HIPAA, and SOC 2 CC6.1 all impose specific handling requirements on PII. Logs typically lack those controls — they are aggregated, retained beyond app data lifecycles, and accessible to operators outside the data-handling team.",
+  "if_violated": "Mandatory breach assessment (GDPR: 72-hour notification window if exposure occurred). Logs containing PII must be purged from every retention tier (hot, cold, archive, replicas, search indexes).",
+  "safe_pattern": "Log only the user's internal ID. If correlation across systems is needed, use a hashed pseudonym, not the email or name. For error contexts that need user information, attach it to an error reporting system (Sentry, Honeybadger) where access is gated and retention is bounded — not to general application logs.",
+  "verification_required": true,
+  "audit_required": true,
+  "what_requires_audit": [
+    "Any log statement that includes a request body, response body, or user object",
+    "Error messages constructed from user input"
+  ],
+  "what_does_not_require_audit": [
+    "Logs of internal user IDs or request IDs",
+    "Logs of timestamps and HTTP status codes"
+  ]
+}

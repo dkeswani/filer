@@ -1,0 +1,30 @@
+{
+  "id": "decision:why-this-template-pack-exists",
+  "type": "decision",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**"],
+  "tags": ["meta", "documentation"],
+  "confidence": 0.99,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Filer ships with a curated library of template nodes that any project can install as a starting point.",
+  "reason": "Filer's value depends on having useful nodes. A user who runs `filer init` against an empty repo gets an empty .filer/ directory and no obvious next step. Bundling a starter library lowers the time-to-first-value from hours to seconds, and demonstrates the shape of well-formed nodes by example.",
+  "alternatives_rejected": [
+    {
+      "option": "Generate templates per-project via LLM (the Continue Checks model)",
+      "why_rejected": "Requires an LLM call at install time, which means an API key, latency, and provider lock-in. A bundled library works offline, deterministically, and on day zero of a project before any LLM has been configured."
+    },
+    {
+      "option": "Ship as a separate npm package (@filer/templates)",
+      "why_rejected": "Separate package means a separate install step, separate version cycle, and separate discovery. Bundling in @filer/cli adds ~50KB and removes all friction. Can be extracted later if the library grows."
+    }
+  ],
+  "decided_at": "2026-04-25",
+  "revisit_if": "Template count exceeds 100 (consider extraction), or per-project LLM generation becomes meaningfully better than curation."
+}

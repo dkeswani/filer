@@ -1,6 +1,6 @@
 {
   "name": "@filer/cli",
-  "version": "1.3.0",
+  "version": "1.3.3",
   "description": "Filer — the knowledge layer for codebases. Extracts constraints, patterns, dangers, and decisions for AI agents.",
   "type": "module",
   "bin": {
@@ -9,13 +9,15 @@
   "main": "./dist/lib/index.js",
   "exports": {
     ".": {
-      "import": "./dist/lib/index.js",
+      "import":  "./dist/lib/index.js",
+      "require": "./dist/lib/index.cjs",
       "default": "./dist/lib/index.js",
-      "types": "./dist/lib/index.d.ts"
+      "types":   "./dist/lib/index.d.ts"
     }
   },
   "files": [
     "dist",
+    "templates",
     "README.md",
     "LICENSE"
   ],
@@ -23,7 +25,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/create-cjs-shim.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",

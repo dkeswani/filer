@@ -1,0 +1,20 @@
+{
+  "id": "constraint:no-sync-fs-in-handlers",
+  "type": "constraint",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/routes/**", "**/api/**", "**/handlers/**", "**/controllers/**"],
+  "tags": ["nodejs", "performance", "event-loop"],
+  "confidence": 0.88,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Never use synchronous filesystem operations (`fs.readFileSync`, `fs.writeFileSync`, `fs.statSync`) inside a request handler.",
+  "because": "Node.js runs request handlers on the event loop. A synchronous fs call blocks the entire event loop — every other in-flight request waits. On a server handling 1,000 req/s, a single 50ms sync read becomes a 50-second tail-latency spike across all concurrent users.",
+  "if_violated": "P99 latency degrades unpredictably under load. The degradation is invisible in development (only one request at a time). It surfaces in production as 'the server is slow' with no obvious cause in any single trace.",
+  "instead": "Use the async equivalent: `await fs.promises.readFile(...)`. For configuration loaded at boot, sync is fine — boot is not a hot path. For anything per-request, async only."
+}

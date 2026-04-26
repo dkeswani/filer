@@ -1,0 +1,23 @@
+{
+  "id": "danger:rate-limit-required-on-public-endpoints",
+  "type": "danger",
+  "version": 1,
+  "created_at": "2026-04-25T00:00:00.000Z",
+  "updated_at": "2026-04-25T00:00:00.000Z",
+  "indexed_by": "@filer/templates@1.0.0",
+  "scope": ["**/routes/**", "**/api/**", "**/handlers/**", "**/controllers/**"],
+  "tags": ["api", "rate-limit", "abuse", "ddos"],
+  "confidence": 0.88,
+  "verified": false,
+  "stale_risk": 0,
+  "related": [],
+  "supersedes": [],
+  "must_not": [],
+  "statement": "Public endpoints (no auth required, or auth not gated by a paid relationship) must enforce a rate limit per IP and per identifier where applicable.",
+  "condition": "An attacker, scraper, or buggy client sends requests at a rate the application cannot handle. Public signup, login, password-reset, and search endpoints are common targets.",
+  "frequency": "Continuous. Public endpoints get attacked within hours of going live, even on small projects.",
+  "current_mitigation": "CDN-level rate limiting (Cloudflare, Fastly), if configured.",
+  "not_fixed_because": "Application-level rate limiting requires a shared store (Redis, memcached) and middleware integration.",
+  "safe_pattern": "Per-IP limit at the edge (CDN or reverse proxy) for crude DDoS protection. Per-identifier limit at the application layer for misuse protection — keyed on user ID for auth'd endpoints, on email for password-reset, on session ID for search. Use a sliding-window or token-bucket implementation backed by Redis. Return HTTP 429 with a `Retry-After` header. Log rate-limit hits to a separate sink so they don't drown out the main log stream.",
+  "history": "Common incident: password-reset endpoint with no rate limit. An attacker enumerated valid emails by observing response timing differences (HTTP 200 for valid, HTTP 200 for invalid but with measurably faster response). Took 6 hours to harvest a 100k-user database."
+}
