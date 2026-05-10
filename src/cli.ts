@@ -28,6 +28,7 @@ import { agentCommand }      from './commands/agent.js';
 import { graphCommand }      from './commands/graph.js';
 import { explainCommand }    from './commands/explain.js';
 import { governingCommand }  from './commands/governing.js';
+import { skillCommand }      from './commands/skill.js';
 import { filerExists }       from './store/mod.js';
 
 const err = (e: Error) => { console.error(chalk.red(`\n  Error: ${e.message}\n`)); process.exit(1); };
@@ -253,6 +254,13 @@ program
   .description('Show a node and its outbound relationships')
   .option('--depth <n>', 'Relationship depth to traverse (default: 1)', '1')
   .action((id, options) => explainCommand(id, options).catch(err));
+
+program
+  .command('skill')
+  .description('Install Filer agent skill into CLAUDE.md, .cursorrules, and .codex/instructions.md')
+  .option('--agent <agent>', 'Target agent: claude | cursor | codex (default: all)')
+  .option('--dry-run',       'Preview changes without writing files')
+  .action((options) => skillCommand({ ...options, dry: options.dryRun }).catch(err));
 
 program
   .command('governing <id>')
