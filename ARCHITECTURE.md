@@ -1,6 +1,6 @@
 # Filer — Architecture
 
-*v1.4.0 — 2026-04-25*
+*v1.5.0 — 2026-04-25*
 
 ---
 
@@ -20,7 +20,8 @@ Filer is a single CLI package (`@filer/cli`) distributed via npm. There is no se
 ├── Report             src/report/          HTML report generation (scan + review)
 ├── Review             src/review/          Pending bundle generation, HTML review UI
 ├── Agent              src/agent/           ReAct loop, event orchestrator, tool manifest
-├── MCP                src/mcp/             MCP server (stdio) — 8 tools for Claude Code
+├── Graph              src/graph/           AST extractor, semantic attachment, builder, viewer
+├── MCP                src/mcp/             MCP server (stdio) — 13 tools for Claude Code / Cursor
 ├── LLM                src/llm/             Provider gateway (Anthropic, OpenAI, Kimi, Ollama)
 ├── Commands           src/commands/        One file per CLI command
 ├── Templates          src/templates/       Loader and installer for bundled templates
@@ -50,7 +51,11 @@ The knowledge layer is a directory of JSON files committed alongside source code
 ├── antipattern/            ← AntipatternNode files
 ├── pattern/                ← PatternNode files
 ├── intent/                 ← IntentNode files
-└── decision/               ← DecisionNode files
+├── decision/               ← DecisionNode files
+├── graph.json              ← v1.5.0 knowledge graph (AST + semantic + governs edges)
+├── GRAPH.md                ← human-readable graph stats and summary
+├── graph.html              ← self-contained D3 interactive graph viewer
+└── cache/ast/              ← incremental AST parse cache (SHA-256 keyed, gitignored)
 ```
 
 File naming: `.filer/<type>/<slug>.json` where slug is the portion of the node `id` after the colon. Example: `security:no-raw-webhook-logging` → `.filer/security/no-raw-webhook-logging.json`.
@@ -224,14 +229,61 @@ All disk I/O goes through `src/store/writer.ts`. Key functions:
 
 ---
 
+## Knowledge Graph (v1.5.0)
+
+### Pipeline
+
+```
+filer graph
+    │
+    ├─ extractAST()        src/graph/extractor.ts
+    │      tree-sitter (web-tree-sitter WASM) parses TS, JS, Python
+    │      emits ASTNode + ASTEdge objects
+    │      caches results in .filer/cache/ast/ by SHA-256
+    │
+    ├─ attachGoverns()     src/graph/attachment.ts
+    │      matches AnyNode.scope globs against ASTNode.source_file
+    │      emits GovernsEdge objects (semantic → AST, confidence: EXTRACTED)
+    │
+    ├─ buildGraph()        src/graph/builder.ts
+    │      assembles all nodes + edges into GraphOutput
+    │      writes .filer/graph.json, .filer/GRAPH.md, .filer/graph.html
+    │
+    └─ renderGraphHtml()   src/graph/viewer.ts
+           self-contained D3 force-directed HTML viewer
+           colour-coded by node kind, governs edges highlighted in orange
+```
+
+### Graph schema
+
+- `ASTNode` — `id: ast:<path>:<line>:<name>`, kind, language, exported flag
+- `ASTEdge` — `contains | imports | imports:external | exports`, confidence
+- `GovernsEdge` — semantic-node-id → AST-node-id, relation: `governs`
+- `TypedEdge` — inter-semantic `RELATED | SUPERSEDES | MUST_NOT_MODIFY_WITH`
+
+### MCP graph tools (new in v1.5.0)
+
+| Tool | Description |
+|---|---|
+| `filer_graph_stats` | Return graph.json stats |
+| `filer_governing` | Semantic nodes governing a file or AST node |
+| `filer_explain` | Node + outbound edges to configurable depth |
+| `filer_ast_node` | AST node + direct structural children |
+| `filer_affected` | All semantic nodes governing a set of changed paths |
+
+---
+
 ## Testing
 
-194 tests across 19 test files. All use vitest. Test files mirror source: `src/foo/bar.ts` → `src/foo/bar.test.ts`.
+215 tests across 23 test files. All use vitest. Test files mirror source: `src/foo/bar.ts` → `src/foo/bar.test.ts`.
 
 Critical tests:
 - `src/templates/loader.test.ts` — every template in the manifest passes `AnyNodeSchema.parse()`
 - `src/schema/nodes.test.ts` — every node type round-trips through its schema
 - `src/store/writer.test.ts` — upsert, merge, stale-marking, scope matching
 - `src/commands/init.test.ts` — template validation before I/O, exit codes, add-only mode
+- `src/graph/extractor.test.ts` — AST extraction with real tree-sitter WASM
+- `src/graph/attachment.test.ts` — scope glob matching and governs-edge emission
+- `src/graph/builder.test.ts` — full graph build, graph.json written, viewer data valid
 
 Run: `npm test` (vitest run) · Build: `npm run build` (tsc + CJS shim)

@@ -298,8 +298,20 @@ program
 
 program.action(async () => {
   const root = process.cwd();
-  if (!filerExists(root)) await wizardCommand();
-  else await statsCommand();
+  if (!filerExists(root)) {
+    // New repo: full scaffold pipeline
+    await wizardCommand();
+  } else {
+    // Existing repo: show stats then offer to rebuild graph
+    await statsCommand();
+    // Auto-rebuild graph if graph.json is absent or stale (quiet, non-blocking)
+    const { default: fs } = await import('fs');
+    const { default: path } = await import('path');
+    const graphPath = path.join(root, '.filer', 'graph.json');
+    if (!fs.existsSync(graphPath)) {
+      console.log(chalk.dim('\n  Tip: run `filer graph` to build the knowledge graph.\n'));
+    }
+  }
 });
 
 program.parseAsync(process.argv).catch((e) => {
