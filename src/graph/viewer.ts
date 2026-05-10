@@ -41,7 +41,7 @@ export interface ViewerData {
 }
 
 export function buildViewerData(graph: GraphOutput, opts: { maxNodes?: number } = {}): ViewerData {
-  const maxNodes = opts.maxNodes ?? 500;
+  const maxNodes = opts.maxNodes ?? 2000;
 
   // Semantic nodes first (higher priority), then AST nodes up to limit
   const semNodes = (graph.nodes as Array<AnyNode>).filter((n): n is AnyNode =>
@@ -113,7 +113,6 @@ export function renderGraphHtml(graph: GraphOutput, opts: { maxNodes?: number } 
 <script>
 const DATA = ${JSON.stringify(data)};
 
-const svg    = d3.select('#svg').attr('width', window.innerWidth).attr('height', window.innerHeight);
 const canvas = d3.select('#canvas')
   .attr('width', window.innerWidth).attr('height', window.innerHeight);
 
