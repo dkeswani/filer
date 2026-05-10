@@ -25,6 +25,9 @@ import { reviewCommand }     from './commands/review.js';
 import { exportCommand }     from './commands/export.js';
 import { packCommand }       from './commands/pack.js';
 import { agentCommand }      from './commands/agent.js';
+import { graphCommand }      from './commands/graph.js';
+import { explainCommand }    from './commands/explain.js';
+import { governingCommand }  from './commands/governing.js';
 import { filerExists }       from './store/mod.js';
 
 const err = (e: Error) => { console.error(chalk.red(`\n  Error: ${e.message}\n`)); process.exit(1); };
@@ -234,6 +237,28 @@ program
   .command('mcp')
   .description('Start the MCP server (stdio) for Claude Code / Cursor')
   .action(() => mcpCommand().catch(e => { console.error('MCP server error:', e.message); process.exit(1); }));
+
+// ── Knowledge graph commands ──────────────────────────────────────────────────
+
+program
+  .command('graph')
+  .description('Build knowledge graph from AST + semantic nodes → graph.json, GRAPH.md, graph.html')
+  .option('--no-incremental', 'Disable incremental cache (re-parse all files)')
+  .option('--open',           'Open graph.html in the default browser after building')
+  .option('--max-nodes <n>',  'Maximum nodes rendered in graph.html (default: 500)')
+  .action((options) => graphCommand(options).catch(err));
+
+program
+  .command('explain <id>')
+  .description('Show a node and its outbound relationships')
+  .option('--depth <n>', 'Relationship depth to traverse (default: 1)', '1')
+  .action((id, options) => explainCommand(id, options).catch(err));
+
+program
+  .command('governing <id>')
+  .description('Show all semantic nodes that govern a given AST node')
+  .option('--type <type>', 'Filter by node type (security, constraint, danger…)')
+  .action((id, options) => governingCommand(id, options).catch(err));
 
 // ── Silent aliases (backwards compatibility) ──────────────────────────────────
 // filer index  → filer layer
