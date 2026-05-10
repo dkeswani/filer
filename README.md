@@ -2,14 +2,15 @@
 
 **The knowledge layer for codebases. Context packer. Security scanner. Self-updating agent.**
 
-Filer is a single CLI that does six things:
+Filer is a single CLI that does seven things:
 
 1. **Extracts institutional knowledge** — constraints, security rules, dangers, patterns, and decisions — and stores them as structured nodes in `.filer/` alongside your code.
-2. **Installs a starter knowledge layer** in seconds with `filer init --templates`, covering security, migrations, error handling, data access, and API patterns.
-3. **Packs your codebase for AI** with `filer pack` — injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
-4. **Scans for security issues** with `filer scan` — generates an HTML severity report and integrates with CI via `--ci --fail-on high`.
-5. **Learns from code review** with `filer learn` — mines PR review comments, identifies institutional knowledge signals, and proposes new nodes automatically.
-6. **Runs as an autonomous agent** with `filer agent` — a self-hostable, zero-dependency orchestrator that responds to git events and keeps the knowledge layer current.
+2. **Builds a knowledge graph** with `filer graph` — parses your codebase into an AST, links semantic nodes to the code they govern, and generates an interactive D3 viewer.
+3. **Installs a starter knowledge layer** in seconds with `filer init --templates`, covering security, migrations, error handling, data access, and API patterns.
+4. **Packs your codebase for AI** with `filer pack` — injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
+5. **Scans for security issues** with `filer scan` — generates an HTML severity report and integrates with CI via `--ci --fail-on high`.
+6. **Learns from code review** with `filer learn` — mines PR review comments, identifies institutional knowledge signals, and proposes new nodes automatically.
+7. **Runs as an autonomous agent** with `filer agent` — a self-hostable, zero-dependency orchestrator that responds to git events and keeps the knowledge layer current.
 
 Ships as `npx @filer/cli@latest`. No server. No external service. The knowledge layer lives in the repo.
 
@@ -70,9 +71,12 @@ Browse the source: [`templates/`](./templates).
 your-repo/
 ├── filer.md              ← agent instructions: how to load the knowledge layer
 ├── .claude/
-│   └── mcp.json          ← MCP server config — 8 Filer tools in Claude Code immediately
+│   └── mcp.json          ← MCP server config — 13 Filer tools in Claude Code immediately
 └── .filer/
     ├── index.json        ← master manifest of all nodes
+    ├── graph.json        ← knowledge graph: AST + semantic nodes + governs edges
+    ├── graph.html        ← interactive D3 graph viewer
+    ├── GRAPH.md          ← human-readable graph stats
     ├── agent-log.md      ← audit trail of every agent run
     ├── review/
     │   ├── pending.json  ← machine-readable review bundle for agents + humans
@@ -122,7 +126,7 @@ The agent sees the constraints before reading a single line of code.
 
 ## Wire into your agent
 
-For Claude Code, `.claude/mcp.json` is written automatically by the wizard — eight MCP tools are immediately available in every session: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_pack`, `filer_review_pending`, `filer_review_apply`.
+For Claude Code, `.claude/mcp.json` is written automatically by the wizard — 13 MCP tools are immediately available in every session: `filer_scope`, `filer_query`, `filer_node`, `filer_stats`, `filer_check`, `filer_pack`, `filer_review_pending`, `filer_review_apply`, `filer_graph_stats`, `filer_governing`, `filer_explain`, `filer_ast_node`, `filer_affected`.
 
 For any other agent, add one line to your `CLAUDE.md`, `AGENTS.md`, or `.cursorrules`:
 
@@ -155,6 +159,16 @@ filer pack --tokens 40000               # fit within token budget
 filer pack --remote user/repo           # pack a remote GitHub repo without cloning
 filer pack --compress                   # strip comments + empty lines
 filer pack --format xml                 # XML output
+
+# Knowledge graph
+filer graph                             # build graph.json + graph.html + GRAPH.md
+filer graph --open                      # build and open viewer in browser
+filer graph --no-incremental            # force re-parse all files
+filer explain <id>                      # show a node and its outbound relationships
+filer governing <id>                    # show all semantic rules governing an AST node
+filer skill                             # install agent skill into CLAUDE.md, .cursorrules
+filer skill --agent claude              # Claude Code only
+filer skill --dry-run                   # preview without writing
 
 # Knowledge exploration
 filer export > FILER_CONTEXT.md         # dump all nodes as Markdown
@@ -204,6 +218,21 @@ filer agent --event scheduled --dry-run # preview what agent would do
 `filer layer` options:
 - Build mode (default): `--scope <path>`, `--force`, `--dry-run`, `--cost`, `--parallel <n>`, `--fast`
 - Update mode (`--update`): `--since <git-ref>`, `--silent`, `--check-stale`
+
+---
+
+### Knowledge graph
+
+| Command | Description |
+|---------|-------------|
+| `filer graph [options]` | Build knowledge graph → `graph.json`, `graph.html`, `GRAPH.md` |
+| `filer explain <id>` | Show a node and its outbound relationships |
+| `filer governing <id>` | Show all semantic nodes governing an AST node or file |
+| `filer skill [options]` | Install Filer agent skill into `CLAUDE.md`, `.cursorrules`, `.codex/` |
+
+`filer graph` options: `--open` (launch browser), `--no-incremental` (re-parse all files), `--max-nodes <n>` (viewer cap, default 2000)
+
+`filer skill` options: `--agent claude|cursor|codex` (default: all three), `--dry-run`
 
 ---
 
@@ -551,7 +580,7 @@ Filer is MIT licensed. The highest-value contributions are:
 git clone https://github.com/dkeswani/filer.git
 cd filer
 npm install
-npm test          # 194 tests — all must pass before and after your change
+npm test          # 215 tests — all must pass before and after your change
 npx tsc --noEmit  # TypeScript must be clean
 ```
 
