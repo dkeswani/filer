@@ -16,7 +16,6 @@ import fs   from 'fs';
 import path from 'path';
 import { FILER_GRAPH } from '../schema/mod.js';
 import type { GraphOutput, ASTNode, GovernsEdge } from '../graph/types.js';
-import type { AnyNode } from '../schema/nodes.js';
 import { LLMGateway } from '../llm/mod.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);

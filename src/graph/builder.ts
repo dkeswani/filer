@@ -1,7 +1,7 @@
 import fs   from 'fs';
 import path from 'path';
 import { readAllNodes, readConfig, filerExists, resolveRoot } from '../store/writer.js';
-import { resolveOriginRepo, FILER_GRAPH, FILER_GRAPH_VERSION } from '../schema/mod.js';
+import { resolveOriginRepo, FILER_GRAPH, FILER_GRAPH_VERSION, FilerConfigSchema } from '../schema/mod.js';
 import { extractAST }   from './extractor.js';
 import { attachGoverns } from './attachment.js';
 import type { GraphOutput, TypedEdge } from './types.js';
@@ -19,7 +19,7 @@ export async function buildGraph(opts: BuildGraphOptions = {}): Promise<GraphOut
     throw new Error(`No .filer/ directory found. Run 'filer init' first.`);
   }
 
-  const config      = readConfig(repoRoot) ?? { llm: { provider: 'anthropic' as const }, include: ['src/**'], exclude: [] };
+  const config      = readConfig(repoRoot) ?? FilerConfigSchema.parse({ llm: { provider: 'anthropic' } });
   const semanticNodes = readAllNodes(repoRoot);
 
   if (!opts.quiet) process.stderr.write('  Extracting AST…\n');

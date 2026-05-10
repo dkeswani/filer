@@ -1,4 +1,3 @@
-import { something } from './other.js';
 import fs from 'fs';
 
 export interface SampleInterface {

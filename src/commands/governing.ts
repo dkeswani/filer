@@ -47,7 +47,7 @@ export async function governingCommand(target: string, options: GoverningOptions
     if (!sem) continue;
     if (options.type && sem.type !== options.type) continue;
 
-    const typeColor: Record<string, chalk.Chalk> = {
+    const typeColor: Record<string, typeof chalk> = {
       security:    chalk.red,
       constraint:  chalk.yellow,
       danger:      chalk.yellow,
