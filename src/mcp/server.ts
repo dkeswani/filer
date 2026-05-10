@@ -12,6 +12,11 @@ import {
   loadNodesForScope,
   filerExists,
 } from '../store/mod.js';
+import fs   from 'fs';
+import path from 'path';
+import { FILER_GRAPH } from '../schema/mod.js';
+import type { GraphOutput, ASTNode, GovernsEdge } from '../graph/types.js';
+import type { AnyNode } from '../schema/nodes.js';
 import { LLMGateway } from '../llm/mod.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -151,6 +156,57 @@ export async function startMcpServer(): Promise<void> {
         name: 'filer_review_pending',
         description: 'Return the current pending review bundle (pending.json). Use this to load all nodes awaiting approval, then call filer_review_apply with your decisions.',
         inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'filer_graph_stats',
+        description: 'Return structural stats from graph.json (AST nodes, semantic nodes, governs edges, languages).',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'filer_governing',
+        description: 'Return all semantic nodes that govern a given file path or AST node id.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            target: { type: 'string', description: 'File path (e.g. src/auth/validate.ts) or AST node id' },
+            type:   { type: 'string', description: 'Filter by node type (security, constraint, danger…)' },
+          },
+          required: ['target'],
+        },
+      },
+      {
+        name: 'filer_explain',
+        description: 'Return a node (AST or semantic) plus its immediate outbound edges from the graph.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id:    { type: 'string', description: 'Node id or name substring to search' },
+            depth: { type: 'number', description: 'Edge traversal depth (default: 1)' },
+          },
+          required: ['id'],
+        },
+      },
+      {
+        name: 'filer_ast_node',
+        description: 'Fetch a specific AST node and its direct structural children.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Full AST node id (ast:<path>:<line>:<name>)' },
+          },
+          required: ['id'],
+        },
+      },
+      {
+        name: 'filer_affected',
+        description: 'Given a list of changed file paths, return all semantic nodes that govern any of those files.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            paths: { type: 'array', items: { type: 'string' }, description: 'Changed file paths' },
+          },
+          required: ['paths'],
+        },
       },
       {
         name: 'filer_review_apply',
@@ -333,6 +389,119 @@ export async function startMcpServer(): Promise<void> {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
+    }
+
+    // ── Graph tools ──────────────────────────────────────────────────────────
+
+    const graphPath = path.join(root, FILER_GRAPH);
+    const loadGraph = (): GraphOutput | null => {
+      try { return JSON.parse(fs.readFileSync(graphPath, 'utf8')); }
+      catch { return null; }
+    };
+
+    if (name === 'filer_graph_stats') {
+      const g = loadGraph();
+      if (!g) return { content: [{ type: 'text', text: 'No graph.json. Run: filer graph' }], isError: true };
+      return { content: [{ type: 'text', text: JSON.stringify(g.stats, null, 2) }] };
+    }
+
+    if (name === 'filer_governing') {
+      const { target, type: filterType } = args as { target: string; type?: string };
+      const g = loadGraph();
+      if (!g) return { content: [{ type: 'text', text: 'No graph.json. Run: filer graph' }], isError: true };
+
+      const allGNodes = g.nodes as Array<ASTNode | AnyNode>;
+      // Find matching AST node ids
+      const matchedIds = new Set<string>(
+        allGNodes
+          .filter(n => n.id.startsWith('ast:') && (
+            n.id === target ||
+            (n as ASTNode).source_file === target ||
+            n.id.includes(target)
+          ))
+          .map(n => n.id)
+      );
+
+      const nodeById = new Map(allGNodes.map(n => [n.id, n]));
+      const govEdges = (g.edges as Array<{ source: string; target: string; relation: string }>)
+        .filter(e => e.relation === 'governs' && matchedIds.has(e.target));
+
+      const semNodes = [...new Map(
+        govEdges.map(e => [e.source, nodeById.get(e.source)])
+      ).values()]
+        .filter((n): n is AnyNode => !!n && !n.id.startsWith('ast:'))
+        .filter(n => !filterType || n.type === filterType);
+
+      return { content: [{ type: 'text', text: JSON.stringify(semNodes, null, 2) }] };
+    }
+
+    if (name === 'filer_explain') {
+      const { id: targetId, depth = 1 } = args as { id: string; depth?: number };
+      const g = loadGraph();
+      if (!g) return { content: [{ type: 'text', text: 'No graph.json. Run: filer graph' }], isError: true };
+
+      const allGNodes = g.nodes as Array<ASTNode | AnyNode>;
+      const nodeById  = new Map(allGNodes.map(n => [n.id, n]));
+      const found = allGNodes.find(n => n.id === targetId) ?? allGNodes.find(n => n.id.includes(targetId));
+      if (!found) return { content: [{ type: 'text', text: `Node not found: ${targetId}` }], isError: true };
+
+      const result: { root: ASTNode | AnyNode; edges: Array<{ edge: object; target: ASTNode | AnyNode }> } = { root: found, edges: [] };
+      let frontier = new Set([found.id]);
+      for (let d = 0; d < depth; d++) {
+        const next = new Set<string>();
+        for (const e of g.edges as Array<{ source: string; target: string; relation?: string }>) {
+          if (frontier.has(e.source)) {
+            const t = nodeById.get(e.target);
+            if (t) { result.edges.push({ edge: e, target: t }); next.add(e.target); }
+          }
+        }
+        frontier = next;
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+
+    if (name === 'filer_ast_node') {
+      const { id: astId } = args as { id: string };
+      const g = loadGraph();
+      if (!g) return { content: [{ type: 'text', text: 'No graph.json. Run: filer graph' }], isError: true };
+
+      const nodeById = new Map((g.nodes as Array<ASTNode | AnyNode>).map(n => [n.id, n]));
+      const node = nodeById.get(astId);
+      if (!node) return { content: [{ type: 'text', text: `AST node not found: ${astId}` }], isError: true };
+
+      const children = (g.edges as Array<{ source: string; target: string; relation?: string }>)
+        .filter(e => e.source === astId && e.relation === 'contains')
+        .map(e => nodeById.get(e.target))
+        .filter(Boolean);
+
+      return { content: [{ type: 'text', text: JSON.stringify({ node, children }, null, 2) }] };
+    }
+
+    if (name === 'filer_affected') {
+      const { paths: changedPaths } = args as { paths: string[] };
+      const g = loadGraph();
+      if (!g) return { content: [{ type: 'text', text: 'No graph.json. Run: filer graph' }], isError: true };
+
+      const allGNodes = g.nodes as Array<ASTNode | AnyNode>;
+      const nodeById  = new Map(allGNodes.map(n => [n.id, n]));
+
+      const matchedIds = new Set<string>(
+        allGNodes
+          .filter(n => n.id.startsWith('ast:') && changedPaths.some(p =>
+            (n as ASTNode).source_file === p || (n as ASTNode).source_file?.startsWith(p + '/')
+          ))
+          .map(n => n.id)
+      );
+
+      const govEdges = (g.edges as Array<{ source: string; target: string; relation: string }>)
+        .filter(e => e.relation === 'governs' && matchedIds.has(e.target));
+
+      const semNodes = [...new Map(
+        govEdges.map(e => [e.source, nodeById.get(e.source)])
+      ).values()]
+        .filter((n): n is AnyNode => !!n && !n.id.startsWith('ast:'));
+
+      return { content: [{ type: 'text', text: JSON.stringify(semNodes, null, 2) }] };
     }
 
     return {
