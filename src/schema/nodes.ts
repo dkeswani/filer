@@ -17,6 +17,9 @@ export const BaseNodeSchema = z.object({
   related:     z.array(z.string()).default([]),
   supersedes:  z.array(z.string()).default([]),
   must_not:    z.array(z.string()).default([]),
+  // Forward-compat hook for v1.6 multi-repo aggregation. Auto-populated by
+  // filer index/graph from `git remote get-url origin`, or repo basename.
+  origin_repo: z.string().optional(),
 });
 
 export type BaseNode = z.infer<typeof BaseNodeSchema>;

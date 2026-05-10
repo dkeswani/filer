@@ -314,3 +314,44 @@ describe('FilerIndex', () => {
     expect(index.stats.nodes_total).toBe(12);
   });
 });
+
+// ── origin_repo field (v1.5.0) ────────────────────────────────────────────────
+
+describe('origin_repo field', () => {
+  it('accepts a node with origin_repo set', () => {
+    const node = AnyNodeSchema.parse({
+      ...base,
+      id:          'constraint:no-eval',
+      type:        'constraint',
+      statement:   'Never use eval()',
+      because:     'Code injection vector',
+      if_violated: 'Arbitrary code execution',
+      origin_repo: 'github.com/dkeswani/filer',
+    });
+    expect(node.origin_repo).toBe('github.com/dkeswani/filer');
+  });
+
+  it('validates a node without origin_repo (backwards compatibility)', () => {
+    const node = AnyNodeSchema.parse({
+      ...base,
+      id:          'constraint:no-eval',
+      type:        'constraint',
+      statement:   'Never use eval()',
+      because:     'Code injection vector',
+      if_violated: 'Arbitrary code execution',
+    });
+    expect(node.origin_repo).toBeUndefined();
+  });
+
+  it('rejects a non-string origin_repo', () => {
+    expect(() => AnyNodeSchema.parse({
+      ...base,
+      id:          'constraint:no-eval',
+      type:        'constraint',
+      statement:   'Never use eval()',
+      because:     'Code injection vector',
+      if_violated: 'Arbitrary code execution',
+      origin_repo: 42,
+    })).toThrow();
+  });
+});
