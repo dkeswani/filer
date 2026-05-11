@@ -7,13 +7,14 @@ import { renderGraphHtml }    from '../graph/viewer.js';
 import { resolveRoot }        from '../store/writer.js';
 
 export interface GraphOptions {
+  root?:        string;   // explicit repo root (defaults to process.cwd())
   open?:        boolean;
   incremental?: boolean;
   maxNodes?:    string;
 }
 
 export async function graphCommand(options: GraphOptions): Promise<void> {
-  const root = resolveRoot();
+  const root = options.root ? resolveRoot(options.root) : resolveRoot();
 
   console.log(chalk.cyan('\n  Building knowledge graph…\n'));
 

@@ -9,6 +9,7 @@ import { groupIntoModules, scanFiles, getChangedFiles } from '../pipeline/scanne
 import { ensureConfig } from './utils.js';
 
 export interface LayerOptions {
+  root?:            string;   // explicit repo root (defaults to process.cwd())
   // Build mode (default)
   scope?:           string;
   force?:           boolean;
@@ -25,7 +26,7 @@ export interface LayerOptions {
 }
 
 export async function layerCommand(options: LayerOptions): Promise<void> {
-  const root   = process.cwd();
+  const root   = options.root ?? process.cwd();
   const config = ensureConfig(root);
 
   // ── --update mode: incremental re-index from last commit ──────────────────
