@@ -1,3 +1,8 @@
+export { layerCommand } from '../commands/layer.js';
+export type { LayerOptions } from '../commands/layer.js';
+export { graphCommand } from '../commands/graph.js';
+export type { GraphOptions } from '../commands/graph.js';
+
 export { queryNodes }                   from './query.js';
 export type { QueryOptions, QueryResult }  from './query.js';
 
