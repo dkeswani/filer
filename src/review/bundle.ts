@@ -2,7 +2,7 @@ import fs   from 'fs';
 import path from 'path';
 import { AnyNode, NODE_PRIORITY } from '../schema/mod.js';
 import { readAllNodes, writeNode, filerDir } from '../store/mod.js';
-import { SEVERITY_MAP } from '../report/generator.js';
+import { SEVERITY_MAP } from './severity.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

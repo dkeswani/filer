@@ -11,7 +11,6 @@ import {
   toolRunUpdate,
   toolRunStalenessCheck,
   toolRunLearn,
-  toolRunScan,
   toolPostSummary,
   type ToolResult,
 } from './tools.js';
@@ -97,9 +96,6 @@ async function dispatch(
         prNumber:  args.prNumber,
         autoApply: action.confidence >= CONFIDENCE_THRESHOLD && !args.securityOnly,
       });
-
-    case 'run_scan':
-      return toolRunScan(root, { ci: false, failOn: args.failOn ?? 'high' });
 
     case 'queue_for_review':
       return {

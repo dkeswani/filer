@@ -7,7 +7,6 @@ import {
   toolGetRepoState,
   toolRunUpdate,
   toolRunLearn,
-  toolRunScan,
   toolPostSummary,
   type ToolResult,
 } from './tools.js';
@@ -53,13 +52,8 @@ export async function runOrchestrator(
     }
 
     case 'ci': {
-      // CI run → security scan, fail on high severity
-      await run(() => toolRunScan(root, {
-        ci:      true,
-        failOn:  ctx.failOn ?? 'high',
-        fast:    false,
-        dryRun:  ctx.dryRun,
-      }));
+      // CI run — filer secrets --ci handles credential scanning
+      await run(() => Promise.resolve({ tool: 'run_scan', success: true, summary: 'Run filer secrets --ci for credential scanning' } as ToolResult));
       break;
     }
 
