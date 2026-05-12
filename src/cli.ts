@@ -17,7 +17,6 @@ import { hookCommand }       from './commands/hook.js';
 import { learnCommand }      from './commands/learn.js';
 import { mcpCommand }        from './commands/mcp.js';
 import { wizardCommand }     from './commands/wizard.js';
-import { scanCommand }       from './commands/scan.js';
 import { secretsCommand }    from './commands/secrets.js';
 import { reviewCommand }     from './commands/review.js';
 import { exportCommand }     from './commands/export.js';
@@ -82,19 +81,6 @@ program
   .option('--json',          'Output findings as JSON')
   .option('--ci',            'Exit non-zero if any secrets are found')
   .action((options) => secretsCommand(options).catch(err));
-
-program
-  .command('scan')
-  .description('Security scan → .filer/report.html')
-  .option('--output <path>',       'Output path for HTML report', '.filer/report.html')
-  .option('--scope <path>',        'Limit to a specific directory')
-  .option('--parallel <n>',        'Process N modules concurrently (default: 1)')
-  .option('--no-open',             'Do not auto-open report in browser')
-  .option('--fast',                'Use indexing model — faster and cheaper')
-  .option('--force',               'Re-scan already-scanned files')
-  .option('--ci',                  'Exit non-zero if findings meet the fail threshold')
-  .option('--fail-on <severity>',  'Failure threshold: critical|high|medium (default: high)', 'high')
-  .action((options) => scanCommand(options).catch(err));
 
 // ── Context packing ───────────────────────────────────────────────────────────
 

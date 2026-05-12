@@ -1,5 +1,5 @@
 import type { ReviewBundle, ReviewItem } from './bundle.js';
-import { SEVERITY_MAP } from '../report/generator.js';
+import { SEVERITY_MAP } from './severity.js';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

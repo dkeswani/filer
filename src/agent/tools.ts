@@ -3,7 +3,6 @@
 
 import { runUpdate }                   from '../pipeline/indexer.js';
 import { learnCommand }                from '../commands/learn.js';
-import { scanCommand }                 from '../commands/scan.js';
 import { checkStaleness }              from '../pipeline/staleness.js';
 import { readIndex, readAllNodes, readConfig } from '../store/mod.js';
 import { LLMGateway }                  from '../llm/mod.js';
@@ -100,26 +99,6 @@ export async function toolRunLearn(
   }
 }
 
-export async function toolRunScan(
-  root: string, opts: { ci?: boolean; failOn?: string; fast?: boolean; dryRun?: boolean }
-): Promise<ToolResult> {
-  try {
-    if (opts.dryRun) {
-      return { tool: 'run_scan', success: true, summary: '[dry-run] Would run: filer scan --ci' };
-    }
-    await scanCommand({
-      output:  `${root}/.filer/report.html`,
-      ci:      opts.ci ?? true,
-      failOn:  (opts.failOn ?? 'high') as any,
-      fast:    opts.fast,
-      open:    false,
-    });
-    return { tool: 'run_scan', success: true, summary: 'Scan complete' };
-  } catch (err) {
-    const msg = String(err);
-    return { tool: 'run_scan', success: false, summary: msg };
-  }
-}
 
 export async function toolPostSummary(root: string, text: string): Promise<ToolResult> {
   try {

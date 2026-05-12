@@ -8,9 +8,8 @@ Filer is a single CLI that does seven things:
 2. **Builds a knowledge graph** with `filer graph` — parses your codebase into an AST, links semantic nodes to the code they govern, and generates an interactive D3 viewer.
 3. **Installs a starter knowledge layer** in seconds with `filer init --templates`, covering security, migrations, error handling, data access, and API patterns.
 4. **Packs your codebase for AI** with `filer pack` — injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
-5. **Scans for security issues** with `filer scan` — generates an HTML severity report and integrates with CI via `--ci --fail-on high`.
+5. **Scans for secrets** with `filer secrets` — fast static credential scan via secretlint, no LLM required. Integrates with CI via `--ci`.
 6. **Learns from code review** with `filer learn` — mines PR review comments, identifies institutional knowledge signals, and proposes new nodes automatically.
-7. **Runs as an autonomous agent** with `filer agent` — a self-hostable, zero-dependency orchestrator that responds to git events and keeps the knowledge layer current.
 
 Ships as `npx @filer/cli@latest`. No server. No external service. The knowledge layer lives in the repo.
 
@@ -184,8 +183,6 @@ filer review --apply                    # commit decisions from a reviewed pendi
 # Security
 filer secrets                           # fast static scan for hardcoded credentials (no LLM)
 filer secrets --ci                      # CI mode — exits non-zero if any secrets found
-filer scan                              # full LLM scan → .filer/report.html
-filer scan --ci --fail-on high          # CI mode — exits non-zero on high/critical
 
 # Learning
 filer learn                             # propose new nodes from PR review history
@@ -248,16 +245,13 @@ Categories: `security`, `migrations`, `error-handling`, `data-access`, `api`, `m
 
 ---
 
-### Scanning & reporting
+### Scanning
 
 | Command | Description |
 |---------|-------------|
 | `filer secrets [options]` | Fast static scan for hardcoded credentials — no LLM, instant results |
-| `filer scan [options]` | Full LLM security scan — generates an HTML severity report |
 
 `filer secrets` options: `--scope <path>`, `--json`, `--ci`
-
-`filer scan` options: `--output <path>` (default `.filer/report.html`), `--scope <path>`, `--parallel <n>`, `--fast`, `--no-open`, `--force`, `--ci`, `--fail-on critical|high|medium`
 
 ---
 
@@ -366,25 +360,7 @@ filer secrets --json                # machine-readable JSON output
 filer secrets --ci                  # exit 1 if any secrets found (for CI pipelines)
 ```
 
-Use this as a pre-commit check or a lightweight CI gate. For a deeper report that includes architectural risks, dangerous patterns, and assumptions alongside credential findings, use `filer scan`.
-
----
-
-## filer scan
-
-`filer scan` runs a full LLM-powered security-focused extraction pass and writes a self-contained HTML report to `.filer/report.html`. It also runs `filer secrets` internally and injects any credential findings as CRITICAL nodes.
-
-```bash
-filer scan                          # scan entire repo, open report when done
-filer scan --scope backend/         # limit to a subdirectory
-filer scan --parallel 4             # faster — 4 modules concurrently
-filer scan --fast                   # use indexing model — cheaper, good for frequent scans
-filer scan --parallel 4 --fast      # fastest: parallel + cheaper model
-filer scan --output security.html   # custom output path
-filer scan --ci --fail-on high      # CI mode — exit 1 on critical or high findings
-```
-
-The report groups findings by severity, links each node to its source scope, and shows verification status. Share it in PR reviews or run it in CI to track security coverage over time.
+Use this as a pre-commit check or a lightweight CI gate. For deeper security analysis including architectural risks, dangerous patterns, and assumptions, run `filer layer` and review the resulting security nodes via `filer review`. A dedicated `filer audit` command (v1.5.1+) is planned for a streamlined security-first pass.
 
 ---
 
@@ -482,7 +458,7 @@ filer agent                               # ReAct loop — LLM decides what to d
 |-------|--------------|
 | `commit` | `filer layer --update` — re-index changed files |
 | `pr_merged` | `filer learn` — mine review comments for new nodes |
-| `ci` | `filer scan --ci` — fail on high-severity findings |
+| `ci` | `filer secrets --ci` — fail on credential findings |
 | `scheduled` | `filer layer --update --check-stale` — nightly staleness check |
 
 Without `--event`, the ReAct loop runs: LLM observes repo state, selects a tool, executes, reflects, repeats. Confidence gates autonomy: ≥ 0.85 auto-applies; < 0.85 queues to `pending.json`; security nodes always queue.
