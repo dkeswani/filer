@@ -297,17 +297,13 @@ Categories: `security`, `migrations`, `error-handling`, `data-access`, `api`, `m
 
 ---
 
-### Learning & measurement
+### Learning
 
 | Command | Description |
 |---------|-------------|
 | `filer learn` | Mine PR review comments and propose new knowledge nodes |
-| `filer measure` | Compute productivity metrics from GitHub PR history |
-| `filer benchmark` | Score LLM responses with vs. without Filer context loaded |
 
 `filer learn` options: `--since <date>`, `--pr <number>`, `--auto-apply`, `--dry-run`, `--from-file <path>`
-`filer measure` options: `--since <date>`, `--before <date>`, `--before-after <date>`, `--pr <number>`
-`filer benchmark` options: `--scope <path>`, `--task <name>`, `--runs <n>`, `--dry-run`
 
 ---
 
@@ -511,18 +507,6 @@ filer learn --from-file comments.txt  # GitLab/Bitbucket/Slack export
 No GitHub token setup required. Filer resolves credentials automatically: env var → `.env` → `gh` CLI → GitHub OAuth Device Flow. The first time you run without a token, Filer opens your browser and walks you through authorization.
 
 If an agent has to be told the same thing twice in code review, `filer learn` closes that gap.
-
----
-
-## filer benchmark
-
-```bash
-filer benchmark                    # auto-detects scope, prompts for task
-filer benchmark --scope backend/   # specify scope manually
-filer benchmark --dry-run          # preview without making API calls
-```
-
-Runs identical tasks with and without Filer context, scores outputs with an LLM judge, and reports average score, token count, latency, and the lift delta from having Filer context loaded.
 
 ---
 
