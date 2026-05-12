@@ -15,8 +15,6 @@ import { queryCommand }      from './commands/query.js';
 import { verifyCommand }     from './commands/verify.js';   // alias
 import { hookCommand }       from './commands/hook.js';
 import { learnCommand }      from './commands/learn.js';
-import { measureCommand }    from './commands/measure.js';
-import { benchmarkCommand }  from './commands/benchmark.js';
 import { mcpCommand }        from './commands/mcp.js';
 import { wizardCommand }     from './commands/wizard.js';
 import { scanCommand }       from './commands/scan.js';
@@ -194,25 +192,6 @@ program
   .option('--auto-apply',        'Auto-apply nodes with confidence >= 0.85')
   .option('--dry-run',           'Show proposals without writing nodes')
   .action((options) => learnCommand(options).catch(err));
-
-program
-  .command('measure')
-  .description('Compute productivity metrics from GitHub PR history')
-  .option('--since <date>',         'Only analyse PRs merged after this date (YYYY-MM-DD)')
-  .option('--before <date>',        'Only analyse PRs merged before this date (YYYY-MM-DD)')
-  .option('--before-after <date>',  'Compare metrics before and after this pivot date')
-  .option('--pr <number>',          'Analyse a single PR by number')
-  .action((options) => measureCommand(options).catch(err));
-
-program
-  .command('benchmark')
-  .description('Score LLM responses with vs. without Filer context loaded')
-  .option('--task <n>',       'Task: implement-feature | review-code | debug-issue')
-  .option('--scope <path>',   'Scope to load knowledge nodes from (auto-detected if not set)')
-  .option('--runs <n>',       'Number of runs per variant', '3')
-  .option('--output <file>',  'Save full report as JSON to this path')
-  .option('--dry-run',        'Show what would run without making API calls')
-  .action((options) => benchmarkCommand(options).catch(err));
 
 // ── Automation ────────────────────────────────────────────────────────────────
 
