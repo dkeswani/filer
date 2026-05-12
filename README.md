@@ -1,6 +1,6 @@
 # Filer
 
-**The knowledge layer for codebases. Context packer. Security scanner. Self-updating agent.**
+**The knowledge layer for codebases. Context packer. Security scanner.**
 
 Filer is a single CLI that does seven things:
 
@@ -76,7 +76,6 @@ your-repo/
     ├── graph.json        ← knowledge graph: AST + semantic nodes + governs edges
     ├── graph.html        ← interactive D3 graph viewer
     ├── GRAPH.md          ← human-readable graph stats
-    ├── agent-log.md      ← audit trail of every agent run
     ├── review/
     │   ├── pending.json  ← machine-readable review bundle for agents + humans
     │   └── report.html   ← HTML review UI — approve/reject/amend in browser
@@ -188,13 +187,6 @@ filer secrets --ci                      # CI mode — exits non-zero if any secr
 filer learn                             # propose new nodes from PR review history
 filer learn --pr 147 --auto-apply       # single PR, auto-apply high-confidence nodes
 
-# Autonomous agent
-filer agent                             # ReAct loop — LLM decides what to do
-filer agent --event commit              # post-push: re-index changed files
-filer agent --event pr_merged --pr 147  # PR merged: mine review comments
-filer agent --event ci                  # CI: security scan + fail gate
-filer agent --event scheduled           # nightly: staleness check
-filer agent --event scheduled --dry-run # preview what agent would do
 ```
 
 ---
@@ -278,16 +270,6 @@ Categories: `security`, `migrations`, `error-handling`, `data-access`, `api`, `m
 `filer export` options: `--type <types>`, `--scope <path>`, `--verified`, `--output <path>`, `--no-header`
 `filer query` options: `--scope <path>`, `--type <types>`, `--no-llm`, `--json`
 `filer review` options: `--tty`, `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
-
----
-
-### Agent
-
-| Command | Description |
-|---------|-------------|
-| `filer agent [--event <type>]` | Event orchestrator or ReAct reasoning loop |
-
-`filer agent` options: `--event commit|pr_merged|ci|scheduled`, `--pr <number>`, `--since <ref>`, `--auto-apply`, `--dry-run`, `--fail-on <severity>`
 
 ---
 
@@ -440,32 +422,6 @@ filer layer --update --silent           # suppress output (used by git post-comm
 `--update` compares file mtimes against node `updated_at` timestamps — only modules with newer files are sent to the LLM.
 
 `--check-stale` pulls the git diff for each node's scope since the node was last updated and asks the LLM whether the diff invalidates the node's claim. Nodes confirmed stale get `stale_risk = 1.0` and surface in `filer review`. The flag is opt-in to keep the post-commit hook fast.
-
----
-
-## filer agent
-
-```bash
-filer agent --event commit
-filer agent --event pr_merged --pr 142 --auto-apply
-filer agent --event ci --fail-on high
-filer agent --event scheduled
-filer agent --event scheduled --dry-run   # preview without executing
-filer agent                               # ReAct loop — LLM decides what to do
-```
-
-| Event | What it does |
-|-------|--------------|
-| `commit` | `filer layer --update` — re-index changed files |
-| `pr_merged` | `filer learn` — mine review comments for new nodes |
-| `ci` | `filer secrets --ci` — fail on credential findings |
-| `scheduled` | `filer layer --update --check-stale` — nightly staleness check |
-
-Without `--event`, the ReAct loop runs: LLM observes repo state, selects a tool, executes, reflects, repeats. Confidence gates autonomy: ≥ 0.85 auto-applies; < 0.85 queues to `pending.json`; security nodes always queue.
-
-**GitHub Actions** — copy `templates/filer.yml` to `.github/workflows/filer.yml`. It auto-selects the event type from `github.event_name` and commits updated nodes back to the branch.
-
-Audit log: `.filer/agent-log.md`.
 
 ---
 

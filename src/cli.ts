@@ -21,7 +21,6 @@ import { secretsCommand }    from './commands/secrets.js';
 import { reviewCommand }     from './commands/review.js';
 import { exportCommand }     from './commands/export.js';
 import { packCommand }       from './commands/pack.js';
-import { agentCommand }      from './commands/agent.js';
 import { graphCommand }      from './commands/graph.js';
 import { explainCommand }    from './commands/explain.js';
 import { governingCommand }  from './commands/governing.js';
@@ -178,19 +177,6 @@ program
   .option('--auto-apply',        'Auto-apply nodes with confidence >= 0.85')
   .option('--dry-run',           'Show proposals without writing nodes')
   .action((options) => learnCommand(options).catch(err));
-
-// ── Automation ────────────────────────────────────────────────────────────────
-
-program
-  .command('agent')
-  .description('Run the Filer agent — ReAct loop (no --event) or CI orchestrator (--event)')
-  .option('--event <type>',        'Event: commit | pr_merged | ci | scheduled')
-  .option('--pr <number>',         'PR number (for pr_merged event)')
-  .option('--since <ref>',         'Git ref to diff from (for commit event)')
-  .option('--auto-apply',          'Auto-apply learned nodes with confidence >= 0.85')
-  .option('--dry-run',             'Preview decisions without executing')
-  .option('--fail-on <severity>',  'CI failure threshold: critical|high|medium (default: high)', 'high')
-  .action((options) => agentCommand(options).catch(err));
 
 // ── Integration ───────────────────────────────────────────────────────────────
 
