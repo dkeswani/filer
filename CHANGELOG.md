@@ -2,6 +2,27 @@
 
 All notable changes to `@filer/cli`. This project follows [Semantic Versioning](https://semver.org/).
 
+## v1.6.1 — 2026-05-15
+
+### Breaking changes
+
+- Removed `filer learn` command. The PR comment mining feature was costly to operate (LLM calls per comment) and overlapped with GitHub Copilot's expanding PR review capabilities. The cross-repo enterprise product does not depend on this command.
+
+### Removed
+
+- `src/commands/learn.ts` and tests
+- `src/lib/github-auth.ts` (was learn-only)
+- README documentation for `filer learn`
+
+### Impact
+
+- 20 commands remain (down from 21)
+- Bundle size further reduced
+- Test count: drops by 16 (learn.test.ts removed)
+- Public API in `src/lib/index.ts` unchanged
+
+---
+
 ## v1.6.0 — 2026-05-12
 
 ### Breaking changes
