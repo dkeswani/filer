@@ -9,7 +9,6 @@ Filer is a single CLI that does seven things:
 3. **Installs a starter knowledge layer** in seconds with `filer init --templates`, covering security, migrations, error handling, data access, and API patterns.
 4. **Packs your codebase for AI** with `filer pack` — injects knowledge annotations inline, selects files by task relevance, and respects token budgets.
 5. **Scans for secrets** with `filer secrets` — fast static credential scan via secretlint, no LLM required. Integrates with CI via `--ci`.
-6. **Learns from code review** with `filer learn` — mines PR review comments, identifies institutional knowledge signals, and proposes new nodes automatically.
 
 Ships as `npx @filer/cli@latest`. No server. No external service. The knowledge layer lives in the repo.
 
@@ -183,10 +182,6 @@ filer review --apply                    # commit decisions from a reviewed pendi
 filer secrets                           # fast static scan for hardcoded credentials (no LLM)
 filer secrets --ci                      # CI mode — exits non-zero if any secrets found
 
-# Learning
-filer learn                             # propose new nodes from PR review history
-filer learn --pr 147 --auto-apply       # single PR, auto-apply high-confidence nodes
-
 ```
 
 ---
@@ -270,16 +265,6 @@ Categories: `security`, `migrations`, `error-handling`, `data-access`, `api`, `m
 `filer export` options: `--type <types>`, `--scope <path>`, `--verified`, `--output <path>`, `--no-header`
 `filer query` options: `--scope <path>`, `--type <types>`, `--no-llm`, `--json`
 `filer review` options: `--tty`, `--type <types>`, `--stale`, `--unverified-only`, `--apply`, `--output <path>`, `--no-open`
-
----
-
-### Learning
-
-| Command | Description |
-|---------|-------------|
-| `filer learn` | Mine PR review comments and propose new knowledge nodes |
-
-`filer learn` options: `--since <date>`, `--pr <number>`, `--auto-apply`, `--dry-run`, `--from-file <path>`
 
 ---
 
@@ -424,21 +409,6 @@ filer layer --update --silent           # suppress output (used by git post-comm
 `--check-stale` pulls the git diff for each node's scope since the node was last updated and asks the LLM whether the diff invalidates the node's claim. Nodes confirmed stale get `stale_risk = 1.0` and surface in `filer review`. The flag is opt-in to keep the post-commit hook fast.
 
 ---
-
-## filer learn
-
-```bash
-filer learn                        # all merged PRs
-filer learn --since 2026-01-01     # from a specific date
-filer learn --pr 147               # single PR
-filer learn --auto-apply           # apply nodes with confidence >= 0.85 without prompting
-filer learn --dry-run              # preview proposals without writing
-filer learn --from-file comments.txt  # GitLab/Bitbucket/Slack export
-```
-
-No GitHub token setup required. Filer resolves credentials automatically: env var → `.env` → `gh` CLI → GitHub OAuth Device Flow. The first time you run without a token, Filer opens your browser and walks you through authorization.
-
-If an agent has to be told the same thing twice in code review, `filer learn` closes that gap.
 
 ---
 

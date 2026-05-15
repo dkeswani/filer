@@ -14,7 +14,6 @@ import { showCommand }       from './commands/show.js';
 import { queryCommand }      from './commands/query.js';
 import { verifyCommand }     from './commands/verify.js';   // alias
 import { hookCommand }       from './commands/hook.js';
-import { learnCommand }      from './commands/learn.js';
 import { mcpCommand }        from './commands/mcp.js';
 import { wizardCommand }     from './commands/wizard.js';
 import { secretsCommand }    from './commands/secrets.js';
@@ -165,18 +164,6 @@ program
   .option('--no-open',             'Do not auto-open the HTML report in browser')
   .option('--output <path>',       'Output path for HTML report', '.filer/review/report.html')
   .action((options) => reviewCommand(options).catch(err));
-
-// ── Learning & measurement ────────────────────────────────────────────────────
-
-program
-  .command('learn')
-  .description('Learn from PR review comments — propose new knowledge nodes')
-  .option('--since <date>',      'Only fetch PRs merged after this date (YYYY-MM-DD)')
-  .option('--pr <number>',       'Fetch a specific PR by number')
-  .option('--from-file <path>',  'Load raw review comments from a file (GitLab, Bitbucket, Slack exports)')
-  .option('--auto-apply',        'Auto-apply nodes with confidence >= 0.85')
-  .option('--dry-run',           'Show proposals without writing nodes')
-  .action((options) => learnCommand(options).catch(err));
 
 // ── Integration ───────────────────────────────────────────────────────────────
 
