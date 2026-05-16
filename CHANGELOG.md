@@ -2,6 +2,27 @@
 
 All notable changes to `@filer/cli`. This project follows [Semantic Versioning](https://semver.org/).
 
+## v1.6.2 — 2026-05-16
+
+### Fixed
+
+- `filer <unknown-command>` now prints an error and exits non-zero, instead of falling through to the init wizard.
+- CLI tagline no longer references the removed `agent` command. Now reads "Knowledge layer · Context packer · Security scanner".
+
+### Internal
+
+- Added `prebuild` script that runs `rimraf dist` before each build. Prevents stale compiled output from shipping when source files are deleted.
+- Added `rimraf` as a devDependency.
+
+### Impact
+
+- No public API changes
+- No breaking changes
+- Same 20 commands, same test count (165 passing)
+- Bundle size unchanged
+
+---
+
 ## v1.6.1 — 2026-05-15
 
 ### Breaking changes
