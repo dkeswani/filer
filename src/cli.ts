@@ -32,7 +32,7 @@ const program = new Command();
 
 program
   .name('filer')
-  .description('Knowledge layer · Context packer · Security scanner · Autonomous agent')
+  .description('Knowledge layer · Context packer · Security scanner')
   .version(version);
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -235,6 +235,11 @@ program
 // ── Default action ────────────────────────────────────────────────────────────
 
 program.action(async () => {
+  if (program.args.length > 0) {
+    console.error(`error: unknown command '${program.args[0]}'`);
+    console.error("(see 'filer --help' for a list of available commands)");
+    process.exit(1);
+  }
   const root = process.cwd();
   if (!filerExists(root)) {
     // New repo: full scaffold pipeline
